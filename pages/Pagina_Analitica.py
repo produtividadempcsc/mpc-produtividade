@@ -6,7 +6,7 @@ from datetime import datetime, date, timedelta
 from sidebar import build_sidebar
 from supabase_client import QueryBuilder, select_all
 from db_compat import get_all_users, get_all_product_types, get_direct_servants
-from pages.analytics_utils import (
+from utils.analytics_utils import (
     prepare_master_dataframe, calculate_metrics_servidor, calculate_metrics_chefe,
     create_metric_card, format_and_plot, calculate_acervo_snapshot
 )
