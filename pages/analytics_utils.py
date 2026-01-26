@@ -35,10 +35,6 @@ def calculate_metrics_servidor(df):
     if df.empty:
         return df
         
-    # Vectorized operations where possible or optimized apply
-    # Nota: calculate_calendar_days_minus_leave complexidade encapsulada no utils
-    # Idealmente, mover lógica temporal para vetorização se possível no futuro
-    
     df['duracao_servidor'] = df.apply(
         lambda row: utils.calculate_calendar_days_minus_leave(
             start_date=row['data_atribuicao_servidor'].date(),
@@ -111,6 +107,47 @@ def calculate_metrics_chefe(df):
     
     return df
 
+def calculate_acervo_snapshot(df, data_ref_ts):
+    """
+    Calcula o estado do acervo em uma data de referência específica.
+    """
+    if df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+        
+    # Acervo Servidores: Atribuído <= data_ref E (Sem Conclusão OU Concluído > data_ref)
+    acervo_serv = df[
+        (df['data_atribuicao_servidor'] <= data_ref_ts) &
+        ( (df['data_conclusao_servidor'].isna()) | (df['data_conclusao_servidor'] > data_ref_ts) )
+    ].copy()
+    
+    # Acervo Chefe: Concluido Servidor <= data_ref E (Sem Conclusão Chefe OU Concluido > data_ref)
+    acervo_chefe = df[
+        (df['data_conclusao_servidor'].notna()) &
+        (df['data_conclusao_servidor'] <= data_ref_ts) &
+        ( (df['data_conclusao_chefe'].isna()) | (df['data_conclusao_chefe'] > data_ref_ts) )
+    ].copy()
+    
+    return acervo_serv, acervo_chefe
+
+def prepare_devolucoes_dataframe(historico_data, usuarios_dict):
+    """
+    Processa dados históricos de devoluções.
+    """
+    if not historico_data:
+        return pd.DataFrame()
+        
+    df = pd.DataFrame(historico_data)
+    
+    # Tenta mapear nomes, se as colunas de ID existirem no histórico ou precisar join manual
+    # O histórico geralmente tem id_processo. Vamos assumir que recebemos dados já enriquecidos ou faremos join simples
+    # Nesse caso, vamos simplificar assumindo que precisamos das contagens
+    
+    # Se o histórico vier raw, ele tem 'id_processo', precisamos saber quem era o responsável na época?
+    # Geralmente a análise é "quantas devoluções ocorreram".
+    
+    # Vamos assumir que a view principal vai passar os dados filtrados
+    return df
+
 def create_metric_card(value, label, icon="📊"):
     return f"""
     <div class="metric-card">
@@ -118,20 +155,6 @@ def create_metric_card(value, label, icon="📊"):
         <div class="metric-label">{label}</div>
     </div>
     """
-
-def plot_bar_chart(df, x_col, y_col, color_col, title, orientation='h'):
-    fig = px.bar(
-        df, x=x_col, y=y_col, color=color_col,
-        orientation=orientation, title=title,
-        color_discrete_sequence=px.colors.qualitative.Vivid,
-        text=x_col if orientation=='h' else y_col
-    )
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-        font_color='#1e293b', title_font_size=16
-    )
-    fig.update_traces(textposition='outside')
-    st.plotly_chart(fig, width='stretch')
 
 def format_and_plot(data, chart_type, title, icon="📈", description=""):
     st.markdown(f'<div class="section-header">{icon} {title}</div>', unsafe_allow_html=True)
@@ -151,14 +174,14 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
                 color="Valor", color_continuous_scale='viridis'
             )
             fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Linha":
             st.line_chart(data)
         else:
             st.area_chart(data)
             
         with st.expander("Ver dados"):
-            st.dataframe(df_display, width="stretch", hide_index=True)
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
             
     elif isinstance(data, pd.DataFrame):
         if data.empty:
@@ -166,9 +189,7 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
             return
             
         if chart_type == "Barra":
-            # Assume formato pivot table ou similar
-            # Melt para formato long se necessário, mas pivot table já vem "wide" para index
-            # Se index for periodo, plotamos
+            # Para visualização temporal agrupada
             st.bar_chart(data)
         elif chart_type == "Linha":
             st.line_chart(data)
@@ -176,4 +197,4 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
             st.area_chart(data)
             
         with st.expander("Ver dados"):
-            st.dataframe(data, width="stretch")
+            st.dataframe(data, use_container_width=True)
