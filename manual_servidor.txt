@@ -1,0 +1,169 @@
+
+
+# **Manual Completo do Sistema de Produtividade MPC/SC**
+## **Guia Detalhado para o Perfil: Servidor**
+
+### **1. Introdução e Visão Geral**
+
+Bem-vindo ao Sistema de Produtividade do MPC/SC. Este manual é o seu guia completo para dominar todas as ferramentas que a plataforma oferece. Como Servidor, você está na linha de frente da análise e elaboração dos processos, e este sistema foi projetado para tornar seu trabalho mais eficiente, transparente e colaborativo.
+
+O sistema automatiza o controle de prazos, centraliza a comunicação, gerencia documentos de forma segura e oferece ferramentas de Inteligência Artificial para potencializar sua produtividade.
+
+---
+
+### **2. Primeiros Passos: Acesso e Configuração Inicial**
+
+#### **2.1. Realizando o Login**
+Para acessar o sistema, utilize suas credenciais institucionais:
+1.  **Login:** Seu nome de usuário único.
+2.  **Senha:** Sua senha pessoal e intransferível.
+
+#### **2.2. Recuperação de Senha**
+Caso tenha esquecido sua senha, o sistema oferece um método seguro para recuperação:
+1.  Na tela de login, localize e clique na opção **"🔐 Esqueceu sua senha?"**.
+2.  Um formulário se expandirá. Digite seu **login** no campo indicado.
+3.  Clique no botão **"🔄 Redefinir Senha"**.
+4.  O sistema enviará uma nova senha temporária para o seu e-mail oficial cadastrado.
+
+> **⚠️ Ponto de Atenção:** Ao receber a senha temporária, acesse o sistema e altere-a imediatamente na seção **"Meu Perfil"** para garantir a segurança da sua conta.
+
+---
+
+### **3. A Tela Principal: Meus Processos**
+
+Esta é sua central de controle. Aqui você encontrará todas as tarefas atribuídas a você, seus prazos e as ferramentas para executá-las.
+
+#### **3.1. Dashboard de Produtividade: Seus Indicadores Chave (KPIs)**
+No topo da página, um painel exibe uma visão rápida da sua carga de trabalho:
+*   **Processos Ativos:** O número total de processos que estão sob sua responsabilidade e aguardam uma ação sua.
+*   **No Prazo:** Quantidade de processos ativos cujo prazo de conclusão ainda não venceu.
+*   **Atrasados:** Quantidade de processos que já ultrapassaram a data de vencimento calculada pelo sistema.
+
+#### **3.2. Filtros Avançados: Localizando o que Você Precisa**
+Para gerenciar seus processos de forma eficiente, utilize a poderosa ferramenta de filtros:
+
+| Filtro | Função | Dica de Uso |
+| :--- | :--- | :--- |
+| **Número do Processo** | Realiza uma busca por similaridade. Você pode digitar o número completo ou apenas uma parte dele. | Útil para encontrar um processo específico rapidamente. |
+| **Status** | Permite selecionar múltiplos status para filtrar a lista (ex: ver apenas processos "Atrasados" e "Devolvidos"). | Use para focar em processos que exigem ação imediata. |
+| **Chefe de Gabinete** | Filtra processos vinculados a um chefe específico (útil caso você trabalhe com mais de um). | Ajuda a organizar o trabalho por equipe ou gestor. |
+| **Procurador** | Filtra processos vinculados a um Procurador específico. | Facilita a localização de processos de uma determinada área de atuação. |
+| **Período (De/Até)** | Seleciona processos com base na **data de atribuição** a você. | Use para analisar a carga de trabalho recebida em uma semana ou mês específico. |
+| **Tipo de Processo** | Filtra por um ou mais "Tipos de Produto" (ex: Parecer, Análise de Edital). | Ideal para agrupar e trabalhar em tarefas similares. |
+| **Ordenar por** | Organiza a lista de processos por data ou prazo, de forma crescente ou decrescente. | Use "Prazo Restante (Crescente)" para ver os processos mais urgentes primeiro. |
+
+#### **3.3. Anatomia de um Card de Processo: Entendendo as Informações**
+Cada processo é um "card" interativo que resume tudo o que você precisa saber.
+
+**Cabeçalho do Card:**
+*   **Ícones de Alerta:**
+    *   **💬:** Há comentários que você ainda não leu.
+    *   **📎:** O processo contém arquivos anexados.
+    *   **⭐:** É um processo que você marcou como favorito.
+    *   **🔥:** Prioridade **Urgente**.
+    *   **⚠️:** Prioridade **Prioritária**.
+*   **Ícone de Status:**
+    *   **🟢:** **No Prazo** - Dentro do prazo calculado.
+    *   **🔴:** **Atrasado** - O prazo de conclusão expirou.
+    *   **🟠:** **Devolvido** - O Chefe de Gabinete retornou o processo para ajustes.
+    *   **⚫:** **Concluído** - Você finalizou sua parte e o processo está em revisão.
+*   **Informações Chave:** Número do processo, status, prazo restante e prioridade.
+
+**Corpo do Card (Ao expandir "Ver detalhes e ações"):**
+Aqui você encontra informações detalhadas como o tipo de produto, o Chefe e Procurador vinculados, e a data de atribuição.
+
+#### **3.4. Ações e Funcionalidades: O que Fazer com um Processo**
+
+Ao expandir um card, você tem acesso às seguintes ações:
+
+*   **🚀 Atualizar Andamento (Sua Ação Principal)**
+    Esta é a funcionalidade para registrar a conclusão do seu trabalho.
+    1.  Clique no botão **"🚀 Atualizar Andamento"**.
+    2.  Um formulário será exibido na tela.
+    3.  **Data de Conclusão:** Preencha com a data em que você finalizou a tarefa.
+    4.  **Adicionar Anexos:** Faça o upload dos documentos que você produziu (pareceres, relatórios, etc.).
+    5.  Clique em **"✅ Concluir e Enviar para Revisão"**.
+
+    > **O que acontece depois?** O processo sairá da sua lista de pendências e será movido para a fila de revisão do seu Chefe de Gabinete. O status mudará para "Concluído" e você não poderá mais editá-lo diretamente.
+
+*   **👁️ Ver Processo**
+    Abre uma interface de visualização detalhada, similar ao SEI, onde você pode:
+    *   Navegar pela "árvore de documentos" do processo.
+    *   Visualizar o conteúdo de cada anexo.
+    *   Baixar todos os anexos de uma só vez em um arquivo `.zip`.
+    *   **Incluir novos documentos** mesmo que sua tarefa principal já tenha sido concluída.
+
+*   **💬 Comentários**
+    Abre o mural de comunicação do processo.
+    *   **Leia** as observações e instruções deixadas pelo seu Chefe.
+    *   **Adicione** seus próprios comentários para registrar o andamento, fazer perguntas ou documentar informações importantes.
+    *   **É aqui que você encontrará o motivo de uma devolução.**
+
+*   **📜 Histórico**
+    Exibe um log completo e cronológico de todas as etapas do processo, desde sua criação até a ação mais recente.
+
+*   **Ícones de Acesso Rápido:**
+    *   **⭐/☆ (Favoritar):** Clique para marcar/desmarcar um processo como favorito. Os favoritos aparecem em um painel de acesso rápido no topo da página.
+    *   **📖 (Descrição):** Mostra as instruções e o escopo do "Tipo de Produto".
+    *   **📄 (Modelo):** Se disponível, permite o download de um modelo de documento (template) para auxiliar na sua elaboração.
+
+---
+
+### **4. Gerenciando Seu Perfil**
+
+A página **"Meu Perfil"** é o seu espaço para gerenciar suas informações e preferências.
+
+*   **Informações Pessoais:** Mantenha seu nome, e-mail e telefone sempre atualizados. O e-mail cadastrado é crucial para o recebimento de notificações.
+*   **Alterar Senha:** Altere sua senha regularmente para manter sua conta segura.
+*   **Preferências de Notificação por E-mail:** Você tem controle total sobre quais e-mails automáticos deseja receber.
+
+| Tipo de Notificação | Descrição | Recomendação |
+| :--- | :--- | :--- |
+| **Novo processo atribuído** | Alerta imediato quando uma nova tarefa é designada a você. | **Manter Ativado** |
+| **Processo devolvido** | Notificação quando o Chefe de Gabinete retorna um processo para ajustes. | **Manter Ativado** |
+| **Lembretes de prazos** | E-mail diário com processos que vencem no dia ou já estão atrasados. | **Manter Ativado** |
+
+---
+
+### **5. Ferramentas de Inteligência Artificial**
+
+O sistema oferece um conjunto de ferramentas de IA para potencializar seu trabalho.
+
+*   **Chat MPC:** Um assistente de IA conversacional. Use-o para:
+    *   Tirar dúvidas sobre legislação.
+    *   Resumir textos longos.
+    *   Ajudar a redigir trechos do seu parecer.
+    *   Traduzir termos técnicos.
+*   **AI Valor Fiscalizado:** Uma ferramenta poderosa para análise de documentos.
+    1.  Faça o upload de um documento de processo (PDF, DOCX, etc.).
+    2.  Clique em "Analisar e Calcular Valor".
+    3.  A IA irá ler o documento, identificar o tipo de processo, extrair os valores relevantes e apresentar o cálculo do "Volume de Recursos Fiscalizados" com base nas regras do MPC/SC.
+    > **⚠️ Alerta:** Esta ferramenta está em fase experimental. **Sempre confira os valores calculados pela IA.** Utilize-a como um ponto de partida para sua análise, não como um resultado final.
+*   **Banco de Prompts:** Um repositório para você salvar e consultar "prompts" (instruções para a IA) que geraram bons resultados. Compartilhe seus melhores prompts e utilize os de seus colegas para obter respostas mais precisas da IA.
+
+---
+
+### **6. Consultas e Relatórios**
+
+*   **Página Analítica (BI):** Um painel interativo (Business Intelligence) com gráficos que detalham a sua performance. Analise seu histórico de produtividade, identifique gargalos e acompanhe sua evolução.
+*   **Meus Afastamentos:** Uma tela de **consulta** que lista todos os seus períodos de férias, licenças e outros afastamentos registrados no sistema. Lembre-se que estes períodos são descontados automaticamente do cálculo dos seus prazos.
+*   **Servidores Afastados:** Uma página informativa para consultar quais usuários do órgão estão atualmente afastados, facilitando a comunicação e o planejamento de tarefas em equipe.
+
+---
+
+### **7. Guia de Solução de Problemas (FAQ)**
+
+*   **P: Um processo que concluí foi devolvido. O que faço?**
+    *   **R:** O processo aparecerá novamente na sua lista de "Meus Processos" com o status "Devolvido". O primeiro passo é ir até a seção de **Comentários**, onde seu Chefe de Gabinete terá explicado o motivo da devolução. Após fazer os ajustes, conclua o processo novamente clicando em "Atualizar Andamento".
+
+*   **P: Meu processo está com o status "Atrasado". E agora?**
+    *   **R:** O sistema sinaliza o processo em vermelho e notifica seu gestor. Sua prioridade deve ser concluir esta tarefa. Se houver um motivo justificável para o atraso, registre-o na seção de **Comentários** para manter a transparência.
+
+*   **P: Como o sistema calcula os prazos?**
+    *   **R:** O cálculo é automático e inteligente. Ele leva em conta: 1) O prazo em dias definido para o "Tipo de Produto"; 2) Se a contagem é em dias **úteis** ou **corridos**; 3) O calendário de **feriados** cadastrado no sistema; 4) Os seus períodos de **afastamento** registrados.
+
+*   **P: Preciso anexar um novo documento a um processo que já concluí. É possível?**
+    *   **R:** Sim. Embora você não possa mais "Atualizar o Andamento", você pode acessar a página **"Ver Processo"**. Dentro dela, há uma funcionalidade para "Incluir Documento" que permite adicionar novos arquivos ao processo a qualquer momento.
+
+---
+*Este manual foi elaborado para garantir o melhor aproveitamento do Sistema de Produtividade. Em caso de dúvidas não abordadas aqui, contate o Administrador do sistema.*

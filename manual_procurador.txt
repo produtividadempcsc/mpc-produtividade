@@ -1,0 +1,129 @@
+
+
+# **Manual Completo do Sistema de Produtividade MPC/SC**
+## **Guia Estratégico para o Perfil: Procurador**
+
+### **1. Introdução: A Visão Estratégica do Procurador**
+
+Bem-vindo ao manual do Sistema de Produtividade, desenhado para o perfil de **Procurador**. Sua função no sistema é de supervisão, análise final e gestão estratégica. Diferente de outros perfis, você possui uma visão holística de **todos os processos** do órgão, além de ferramentas administrativas poderosas para garantir a conformidade, a eficiência e a qualidade do trabalho realizado.
+
+Este guia detalhará cada funcionalidade ao seu dispor, desde a análise de dashboards de produtividade até a gestão de prazos e a utilização de ferramentas de Inteligência Artificial para apoiar suas decisões.
+
+---
+
+### **2. Acesso e Segurança da Conta**
+
+#### **2.1. Login no Sistema**
+Acesse a plataforma utilizando seu login e senha institucionais.
+
+#### **2.2. Recuperação de Senha**
+Caso esqueça sua senha, utilize o recurso **"🔐 Esqueceu sua senha?"** na tela de login. Insira seu login e uma nova senha temporária será enviada ao seu e-mail cadastrado. Por segurança, é crucial que você altere esta senha temporária assim que acessar o sistema, através da página **"Meu Perfil"**.
+
+---
+
+### **3. O Hub de Controle: A Página "Processos MPC"**
+
+Esta é a sua principal interface de trabalho, oferecendo uma visão completa e sem restrições de todos os processos em andamento no sistema.
+
+#### **3.1. Visão Global e Filtros Avançados**
+Você tem a capacidade de visualizar processos de todos os servidores, gabinetes e procuradores. Para gerenciar este volume de informações, utilize os filtros avançados:
+
+| Filtro | Função Estratégica | Dica de Uso |
+| :--- | :--- | :--- |
+| **Número do Processo**| Localiza um processo específico de forma rápida, independentemente de quem seja o responsável. | Ideal para consultas diretas e auditorias pontuais. |
+| **Status** | Filtra processos em etapas específicas do fluxo de trabalho (ex: "Atrasado", "Processo com o Procurador"). | Use para focar em gargalos ou processos que necessitam de sua atenção final. |
+| **Servidor / Chefe** | Isola a produção de um servidor ou de um gabinete inteiro. | Permite analisar a carga de trabalho e a performance de equipes específicas. |
+| **Procurador** | Filtra processos vinculados a uma área de atuação ou a um Procurador específico. | Facilita a gestão de processos temáticos. |
+| **Período (De/Até)** | Analisa o fluxo de entrada de processos em um intervalo de tempo. | Essencial para relatórios de produtividade e análise de tendências. |
+| **Tipo de Processo** | Agrupa processos por natureza (ex: "Análise de Contrato", "Tomada de Contas"). | Ajuda a identificar o volume de trabalho por especialidade. |
+| **Ordenar por** | Prioriza a visualização com base em urgência ou data de entrada. | Use "Prazo Restante (Crescente)" para identificar os processos mais críticos. |
+
+#### **3.2. Ações Estratégicas e de Gerenciamento**
+Como Procurador, você possui permissões elevadas para intervir e gerenciar os processos. A principal ferramenta para isso é o botão **"✏️ Editar Processo"**, que abre um formulário com poderes administrativos.
+
+##### **A. Edição de Dados Fundamentais:**
+Você pode alterar:
+*   **Número do Processo, Servidor Responsável e Tipo de Produto:** Para corrigir erros de cadastro ou reatribuir tarefas.
+*   **Datas Chave:** Altere a **Data de Atribuição**, **Data de Conclusão do Servidor** e **Data de Revisão do Chefe**. Esta ação recalcula automaticamente os prazos e o status do processo.
+
+##### **B. Gestão Direta de Prazos:**
+*   **Suspender Prazo:** Pause a contagem do prazo de um processo. Ideal para situações que dependem de diligências externas ou informações adicionais.
+*   **Reiniciar Prazo:** Retome a contagem do prazo após uma suspensão. Os dias em que o processo esteve suspenso são adicionados ao prazo final.
+
+##### **C. Finalização e Reversão de Processos:**
+*   **Marcar como Finalizado:** Ao marcar esta opção, o processo é considerado encerrado em todas as suas etapas. Use esta função para aprovar e finalizar um processo que chegou para sua análise.
+*   **Reverter Finalização:** Se um processo foi finalizado por engano ou precisa ser reaberto, basta desmarcar a opção "Marcar como Finalizado" para que ele retorne ao seu status anterior.
+
+##### **D. ⚠️ Ação de Risco: Exclusão Permanente**
+*   **Atenção Máxima:** Você tem a permissão para **deletar permanentemente** um registro de processo.
+*   **Processo de Exclusão:**
+    1.  Dentro do formulário de edição, no final da página, marque a caixa de confirmação: **"Sim, eu entendo e quero deletar este registro."**
+    2.  O botão **"Deletar Registro Permanentemente"** será habilitado.
+    3.  Ao clicar, **o processo e todo o seu histórico serão removidos de forma irreversível.** Use esta função com extrema cautela, apenas para corrigir erros graves de cadastro.
+
+#### **3.3. Outras Ações Disponíveis**
+*   **👁️ Ver Processo:** Acessa a visualização estilo SEI para navegar e baixar os documentos.
+*   **💬 Comentários:** Leia o histórico de comunicação e adicione suas diretrizes ou observações finais.
+*   **📜 Histórico:** Audite o log completo de todas as ações realizadas no processo.
+*   **⭐ Favoritar:** Marque processos estratégicos para acesso rápido no topo da página.
+
+---
+
+### **4. Página Analítica (BI): A Ferramenta de Gestão**
+
+Sua visão na **Página Analítica** é a mais completa do sistema, permitindo uma análise profunda da performance organizacional.
+
+*   **Perspectiva do Parecerista:** Analise a produtividade individual de cada servidor, comparando volume de entregas, tempo médio e conformidade com prazos.
+*   **Perspectiva do Gabinete:** Avalie a eficiência da etapa de revisão de cada Chefe de Gabinete, identificando a agilidade e o volume de trabalho de cada equipe.
+*   **Perspectiva MPC/SC:** Tenha uma visão consolidada de todo o órgão. Use estes dados para identificar tendências, alocar recursos e tomar decisões estratégicas baseadas em dados concretos.
+
+---
+
+### **5. Ferramentas de Inteligência Artificial**
+
+Utilize as ferramentas de IA como um poderoso assessor para suas atividades.
+
+*   **Chat MPC:** Ideal para:
+    *   Pesquisas rápidas de jurisprudência e legislação.
+    *   Elaborar minutas e rascunhos de despachos.
+    *   Resumir o conteúdo de processos longos para uma análise preliminar.
+*   **AI Valor Fiscalizado:** Obtenha uma estimativa rápida do "Volume de Recursos Fiscalizados" de um processo fazendo o upload do documento principal. Essencial para ter uma noção imediata do impacto financeiro de um caso. **Lembre-se de sempre validar o resultado.**
+*   **Banco de Prompts:** Salve e consulte os comandos de IA mais eficazes para tarefas jurídicas e de análise, criando um acervo de conhecimento para otimizar suas interações com a IA.
+
+---
+
+### **6. Gestão de Pessoas e Prazos (Visão Global)**
+
+Você possui acesso administrativo às seguintes áreas:
+
+*   **Gerenciar Afastamentos:** Registre férias e licenças para **qualquer usuário** do sistema. Esta função é vital para o planejamento de recursos e para garantir que os prazos sejam calculados corretamente.
+*   **Gerenciar Substituições:** Designe um Servidor para atuar como Chefe de Gabinete substituto durante um período de ausência. Você pode configurar substituições para **qualquer gabinete**.
+*   **Servidores Afastados:** Consulte rapidamente a lista de todos os usuários que estão afastados na data atual.
+
+---
+
+### **7. Seu Perfil e Configurações**
+
+Na página **"Meu Perfil"**, você pode:
+*   Atualizar suas informações de contato.
+*   Alterar sua senha.
+*   Configurar as notificações por e-mail que deseja receber, incluindo alertas quando processos estão prontos para sua análise final.
+
+---
+
+### **8. Guia de Solução de Problemas (FAQ) para o Procurador**
+
+*   **P: Um processo foi finalizado, mas precisa de uma nova análise. Como proceder?**
+    *   **R:** Localize o processo na página "Processos MPC", clique em "Editar", desmarque a caixa **"Marcar como Finalizado"** e salve. O processo retornará ao seu status anterior, permitindo novas ações.
+
+*   **P: Qual a diferença entre as páginas "Processos no Gabinete", "Processos para Revisão" e a minha página "Processos MPC"?**
+    *   **R:** As outras páginas são visões **filtradas** para o Chefe de Gabinete, mostrando apenas os processos de sua equipe em etapas específicas. A sua página, "Processos MPC", é a visão **completa e global**, sem filtros pré-aplicados, dando-lhe controle total.
+
+*   **P: Ao editar um processo, alterei a data de conclusão de um servidor. O que acontece?**
+    *   **R:** O sistema irá **recalcular automaticamente** todos os prazos e o status subsequentes. Se a nova data tornar a revisão do Chefe atrasada, o status será atualizado instantaneamente.
+
+*   **P: A exclusão de um processo pode ser desfeita?**
+    *   **R:** **NÃO.** A exclusão é uma ação final e irreversível. Utilize-a apenas em casos de erro absoluto no cadastro inicial do processo. Não há como recuperar um processo deletado.
+
+---
+*Este manual visa capacitá-lo(a) a utilizar plenamente o potencial estratégico do sistema. Para qualquer dúvida adicional, contate o Administrador da plataforma.*

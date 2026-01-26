@@ -1,0 +1,150 @@
+
+
+# **Manual Completo e Estratégico do Sistema de Produtividade MPC/SC**
+## **Guia Definitivo para o Perfil: Chefe de Gabinete**
+
+### **1. Introdução: Sua Posição como Gestor no Sistema**
+
+Bem-vindo, Chefe de Gabinete. Este manual é o seu guia completo para dominar o Sistema de Produtividade. No ecossistema do MPC/SC, seu perfil é o mais dinâmico e central. Você não é apenas um usuário, mas o **gestor do fluxo de trabalho** da sua equipe.
+
+Suas responsabilidades incluem:
+*   **Distribuição:** Criar e atribuir novos processos aos servidores.
+*   **Supervisão:** Monitorar o andamento, os prazos e a carga de trabalho da sua equipe.
+*   **Controle de Qualidade:** Revisar, aprovar ou devolver os trabalhos concluídos.
+*   **Gestão de Pessoas:** Administrar usuários, afastamentos e substituições no seu gabinete.
+*   **Análise Estratégica:** Utilizar dados para tomar decisões e melhorar a performance do seu time.
+
+Este guia detalhará cada uma dessas capacidades.
+
+---
+
+### **2. Acesso e Configuração Inicial**
+
+#### **2.1. Login e Recuperação de Senha**
+Acesse o sistema com seu login e senha. Caso esqueça sua senha, utilize a opção **"🔐 Esqueceu sua senha?"** na tela inicial. Uma nova senha temporária será enviada ao seu e-mail, e é altamente recomendável que você a altere imediatamente na página **"Meu Perfil"** após o primeiro acesso.
+
+---
+
+### **3. Visão Geral do seu Fluxo de Trabalho**
+
+Seu trabalho no sistema segue um ciclo lógico, espelhado na estrutura das páginas disponíveis para você:
+
+1.  **Criação e Atribuição:** Você inicia um novo processo na tela **"Processos no Gabinete"**.
+2.  **Monitoramento:** Você acompanha o andamento dos processos com sua equipe nesta mesma tela.
+3.  **Revisão:** Quando um servidor conclui uma tarefa, ela aparece na sua fila de **"Processos para Revisão"**.
+4.  **Aprovação/Devolução:** Nesta fila, você analisa o trabalho. Se aprovado, ele segue para o Procurador. Se precisar de ajustes, você o devolve ao servidor com comentários.
+5.  **Acompanhamento Final:** Você monitora os processos já aprovados que estão com o Procurador na tela **"Processos com o Procurador"**.
+
+---
+
+### **4. Dominando as Telas Principais**
+
+#### **4.1. Processos no Gabinete: Sua Central de Comando**
+
+Esta é a sua tela principal para gestão e distribuição.
+
+##### **A. Indicadores de Desempenho (KPIs):**
+No topo, você tem uma visão geral da situação do seu gabinete:
+*   **Processos com Servidores:** Quantidade de tarefas em andamento com sua equipe.
+*   **Processos para Revisão:** Sua fila de trabalho pendente.
+*   **Processos com o Procurador:** Processos que já passaram por você e aguardam a análise final.
+
+##### **B. Adicionar Novo Processo (Sua Principal Ação de Entrada):**
+Aqui você inicia o fluxo de trabalho:
+1.  **Número do Processo:** Insira a identificação oficial.
+2.  **Tipo de Produto:** Selecione a natureza do trabalho (ex: "Parecer Padrão"). Isso define os prazos padrão.
+3.  **Atribuir ao Servidor:** Escolha um membro da sua equipe. Você também pode atribuir o processo **a si mesmo**.
+4.  **Procurador Vinculado:** Associe o processo ao Procurador correto.
+5.  **Prioridade:** Defina como **Regular, Prioritário ou Urgente**. Isso afeta a ordem de exibição e sinaliza a urgência para a equipe.
+6.  **Anexos e Observações:** Anexe os documentos iniciais e escreva instruções claras no campo de observações.
+7.  **Opções de Exceção:**
+    *   `Não se aplica prazo`: Para tarefas sem um prazo definido.
+    *   `Ignorar etapa de Revisão`: Para processos que podem ir direto ao Procurador após a conclusão do servidor.
+    *   `Ignorar etapa de Análise`: Para processos que são finalizados após sua revisão.
+
+> **Dica Estratégica:** Ao criar um processo, a clareza nas "Observações Iniciais" reduz a chance de retrabalho. Use este campo para definir o escopo e os pontos de atenção.
+
+##### **C. Gerenciando Processos Existentes:**
+Para cada processo listado, você pode:
+*   **✏️ Editar Processo:** Esta é uma ferramenta poderosa que permite alterar qualquer detalhe do processo, como reatribuir para outro servidor, corrigir o tipo de produto ou ajustar prazos.
+*   **👁️ Ver Processo:** Acessa a visão estilo SEI para navegar pelos documentos.
+*   **💬 Comentários:** Comunique-se com sua equipe, tire dúvidas e registre decisões.
+*   **📜 Histórico:** Audite todas as ações realizadas no processo.
+*   **🚀 Atualizar Andamento:** Se um processo foi atribuído a você, use esta opção para registar sua conclusão.
+
+#### **4.2. Processos para Revisão: O Ponto de Controle de Qualidade**
+
+Esta página é sua fila de trabalho. São os processos que sua equipe marcou como "Concluídos" e que agora dependem da sua análise.
+
+*   **Ação Principal: 🔍 Analisar**
+    Ao clicar, um formulário dedicado se abre, oferecendo duas opções cruciais:
+
+    1.  **✅ Aprovar e Enviar para Procurador:**
+        *   **Função:** Valida o trabalho do servidor e move o processo para a próxima etapa.
+        *   **O que fazer:** Defina a "Data de Envio ao Procurador" e clique no botão.
+        *   **Resultado:** O processo sai da sua fila e aparece na tela "Processos com o Procurador".
+
+    2.  **↩️ Devolver ao Servidor com Novo Prazo:**
+        *   **Função:** Retorna o processo ao servidor para correções ou complementações.
+        *   **O que fazer:**
+            1.  **Preencha as "Observações para Devolução"**: Este campo é **obrigatório**. Seja claro e específico sobre os ajustes necessários. Esta informação é crucial para o servidor.
+            2.  Defina uma **"Nova Data de Atribuição"** e um **"Prazo Adicional"**.
+            3.  Clique no botão de devolução.
+        *   **Resultado:** O processo volta para a lista de pendências do servidor com o status "Devolvido", e ele será notificado.
+
+#### **4.3. Processos com o Procurador: Acompanhamento Final**
+Esta é uma tela de consulta para você rastrear os processos que já foram aprovados por você. Você pode acompanhar quais tarefas estão na mesa do Procurador e, se necessário, **marcar um processo como "Finalizado"** caso receba a confirmação por outro meio, encerrando seu ciclo no sistema.
+
+#### **4.4. Meus Processos: Quando Você é o Executor**
+Esta página só é relevante quando você **atribui um processo a si mesmo**. Nesse cenário, você atua como um "Servidor", e esta tela espelha as funcionalidades da página de um servidor para que você possa executar e concluir sua própria tarefa.
+
+---
+
+### **5. Gestão Estratégica da Equipe**
+
+Você possui permissões administrativas focadas no seu gabinete.
+
+*   **Gerenciar Usuários:**
+    *   Adicione novos servidores à sua equipe.
+    *   Edite informações e redefina senhas dos seus liderados.
+    *   **Gerencie Vínculos:** Vincule ou desvincule servidores do seu gabinete ou a procuradores específicos.
+*   **Gerenciar Afastamentos e Substituições:**
+    *   **Afastamentos:** Registre férias e licenças para os membros da sua equipe e para si mesmo. O sistema usará essa informação para **ajustar automaticamente os prazos** dos processos.
+    *   **Substituições:** Designe um servidor da sua equipe para ser seu **substituto oficial** durante um período de ausência. Durante esse período, o servidor substituto terá acesso às suas telas de gestão e poderá tomar ações em seu nome.
+
+---
+
+### **6. Análise de Desempenho: A Página Analítica (BI)**
+
+Esta é sua ferramenta mais poderosa para a tomada de decisão. Utilize os gráficos e dados para:
+*   **Avaliar a Performance Individual:** Identifique os servidores mais produtivos e aqueles que podem precisar de apoio, analisando o volume de entregas e o tempo médio de conclusão.
+*   **Analisar a Carga de Trabalho:** Verifique como os processos estão distribuídos e identifique possíveis sobrecargas.
+*   **Monitorar o Cumprimento de Prazos:** Acompanhe o percentual de entregas no prazo da sua equipe e identifique as causas de possíveis atrasos.
+*   **Identificar Gargalos:** Analise o "acervo" (processos parados) para entender onde o fluxo de trabalho está sendo interrompido.
+
+---
+
+### **7. Ferramentas de IA e Outras Funcionalidades**
+
+*   **Chat MPC, AI Valor Fiscalizado e Banco de Prompts:** Utilize as ferramentas de IA para agilizar suas próprias análises e incentive sua equipe a usá-las para aumentar a produtividade geral.
+*   **Meu Perfil:** Gerencie suas informações pessoais, altere sua senha e configure suas notificações por e-mail, incluindo alertas importantes como "Processo concluído pela equipe".
+*   **Meus Afastamentos e Servidores Afastados:** Consulte seus próprios afastamentos e verifique a disponibilidade da sua equipe e de outros colegas.
+
+---
+
+### **8. Guia de Solução de Problemas (FAQ) para o Chefe de Gabinete**
+
+*   **P: Atribuí um processo ao servidor errado. Como corrijo?**
+    *   **R:** Vá para a página **"Processos no Gabinete"**, localize o processo, clique em "Ver detalhes e ações" e depois em **"✏️ Editar Processo"**. No formulário, você poderá selecionar o servidor correto e salvar.
+
+*   **P: Um processo precisa ser acelerado. Como posso sinalizar isso?**
+    *   **R:** Ao criar ou editar um processo, defina a **Prioridade** como "Prioritário" ou "Urgente". Além disso, use a seção de **Comentários** para passar instruções diretas ao servidor.
+
+*   **P: O que acontece exatamente quando eu devolvo um processo?**
+    *   **R:** O processo retorna à lista de pendências do servidor com o status "Devolvido". O prazo original é pausado, e um novo prazo (que você definiu) começa a contar. O servidor é notificado e sua observação no campo de devolução se torna um comentário no histórico do processo.
+
+*   **P: Posso atribuir um processo diretamente a mim?**
+    *   **R:** Sim. Ao criar um novo processo, seu nome aparecerá na lista de "Atribuir ao Servidor". Se você se selecionar, o processo aparecerá na sua página **"Meus Processos"** para que você mesmo o execute.
+
+---
+*Este manual foi projetado para ser seu recurso de referência. Explore as ferramentas e utilize os dados a seu favor para liderar sua equipe com máxima eficiência.*

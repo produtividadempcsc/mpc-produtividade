@@ -1,0 +1,131 @@
+
+
+# **Manual Técnico e Estratégico do Sistema de Produtividade MPC/SC**
+## **Guia Completo para o Perfil: Administrador**
+
+### **1. Introdução: Sua Função como Administrador do Sistema**
+
+Bem-vindo, Administrador. Este manual é o seu guia definitivo para a gestão completa do Sistema de Produtividade. Seu perfil possui o mais alto nível de privilégios, conferindo a você o controle total sobre a configuração, os dados, os usuários e a segurança da plataforma.
+
+Suas responsabilidades-chave incluem:
+*   **Configuração Global:** Gerenciar os parâmetros centrais que afetam todo o sistema, como tipos de produto, prazos e feriados.
+*   **Gestão de Usuários:** Criar, editar, remover e gerenciar as hierarquias de todos os usuários.
+*   **Segurança e Continuidade:** Executar e gerenciar backups, restaurar o sistema em caso de necessidade e garantir a integridade dos dados.
+*   **Supervisão e Auditoria:** Acessar todas as informações e relatórios para uma visão completa da performance do órgão.
+
+Este documento detalha cada uma dessas capacidades para que você possa administrar o sistema com eficiência e segurança.
+
+---
+
+### **2. O Painel de Administração: Sua Central de Controle**
+
+A página de **Administração** é o seu principal hub de gerenciamento, dividida em abas que organizam as funcionalidades críticas.
+
+#### **2.1. 📦 Tipos de Produto: A Base dos Prazos do Sistema**
+Esta é uma das seções mais importantes, pois define a lógica de cálculo de prazos para todos os processos.
+
+*   **Adicionar Novo Produto:**
+    *   **Função:** Cria um novo tipo de tarefa que os Chefes de Gabinete podem atribuir.
+    *   **Campos:**
+        *   `Nome do Produto:` O nome que aparecerá para os usuários (ex: "Análise de Contrato de TI").
+        *   `Prazo Servidor / Chefe:` O número de dias padrão para cada etapa.
+        *   `Tipo de Contagem:` **Dias úteis** (desconsidera fins de semana e feriados) ou **dias corridos**.
+        *   `Data de Validade:` Define até quando esta versão do produto é válida.
+        *   `Descrição / Instruções:` Um campo de texto rico (Markdown) para orientar os usuários sobre o que se espera para este tipo de produto.
+        *   `Modelo do Documento:` Faça o upload de um template (.docx, .odt) que os usuários poderão baixar para iniciar o trabalho.
+
+*   **Editar/Deletar:**
+    *   Permite corrigir ou remover um tipo de produto existente.
+    *   **Atenção:** Deletar um tipo de produto pode causar inconsistências em processos antigos que o utilizavam. Prefira editar ou criar uma nova versão.
+
+*   **Alterar Prazo (Criar Nova Versão):**
+    *   **Função Estratégica:** Em vez de editar um prazo e afetar o histórico de processos passados, esta função cria uma **nova versão** do produto com prazos atualizados.
+    *   **Como Funciona:**
+        1.  Selecione o produto que deseja alterar.
+        2.  Defina os novos prazos e a **data de vigência**.
+        3.  O sistema automaticamente encerrará a validade da versão antiga um dia antes da vigência da nova e criará uma `v2`, `v3`, etc.
+    *   **Impacto:** Processos criados **antes** da data de vigência continuarão usando os prazos antigos, garantindo a integridade histórica dos dados. Processos criados **após** a vigência usarão os novos prazos.
+
+#### **2.2. 📅 Gerenciar Feriados e Calendário**
+O sistema utiliza este calendário para calcular prazos em "dias úteis".
+*   **Adicionar Feriado:** Cadastre feriados nacionais, estaduais, municipais e pontos facultativos.
+*   **Remover Feriado:** Converte um dia não útil de volta para um dia útil, recalculando os prazos que são afetados por ele.
+
+#### **2.3. 🌴 Afastamento Global (Recesso Coletivo)**
+*   **Função:** Ferramenta poderosa para registrar recessos de fim de ano ou outros afastamentos coletivos.
+*   **Ação:** Ao registrar um período aqui, o sistema cria um registro de afastamento para **TODOS os usuários cadastrados**, fazendo com que os prazos de todos os processos sejam automaticamente pausados e ajustados durante esse período.
+
+#### **2.4. 💾 Gerenciar Backup**
+A continuidade do sistema depende de uma rotina de backup sólida.
+*   **Backup Manual:** Acione um backup completo do banco de dados a qualquer momento. Um arquivo Excel (`.xlsx`) será gerado e enviado para o e-mail configurado.
+*   **Configuração do Backup Automático:**
+    *   `Frequência:` Defina se os backups automáticos devem ocorrer **Diariamente**, **Semanalmente** ou se devem ser **Desativados**.
+    *   `E-mail para Backup:` Configure o endereço de e-mail que receberá os arquivos de backup automáticos. **Este campo é crucial.**
+
+#### **2.5. 🔄 Restauração do Sistema (Operação de Alto Risco)**
+*   **Função:** Permite restaurar o estado completo do sistema a partir de um arquivo de backup (`.xlsx`).
+*   **⚠️ AVISO MÁXIMO:** Esta ação é **IRREVERSÍVEL**. Ela irá **APAGAR TODOS OS DADOS ATUAIS** do banco de dados e substituí-los pelo conteúdo do arquivo de backup.
+*   **Procedimento:**
+    1.  Faça o upload do arquivo de backup.
+    2.  Marque a caixa de confirmação para provar que você entende as consequências.
+    3.  Clique em "Iniciar Restauração".
+    4.  Após a restauração, o sistema executa uma rotina de pós-processamento para recalcular todos os status e garantir a consistência dos dados.
+*   **Quando Usar:** Apenas em casos de emergência, como corrupção de dados ou falha crítica do sistema.
+
+#### **2.6. 📊 Relatório Mensal**
+*   **Configuração:** Defina o e-mail do destinatário que receberá o relatório consolidado de produtividade mensal (normalmente, a gestão superior).
+*   **Envio Manual:** Além do envio automático no início de cada mês, você pode gerar e enviar manualmente o relatório para qualquer mês/ano que possua dados, a qualquer momento.
+
+---
+
+### **3. Gestão Completa de Usuários**
+
+Na página **"Gerenciar Usuários"**, você tem controle total sobre as contas e a estrutura organizacional.
+
+*   **Visão Geral:** Uma tabela exibe todos os usuários, seus perfis, e-mails e vínculos hierárquicos.
+*   **Adicionar Novo Usuário:**
+    *   Crie contas para novos membros, definindo nome, login, senha inicial e perfil.
+    *   **Gerenciamento de Vínculos:** Ao criar um usuário, você pode imediatamente associá-lo à sua estrutura:
+        *   **Servidor:** Vincule-o a um ou mais Chefes de Gabinete.
+        *   **Chefe de Gabinete:** Vincule-o aos Procuradores que ele atende e a outros Chefes que sejam seus superiores hierárquicos.
+*   **Editar Usuário:**
+    *   Altere qualquer informação de um usuário existente.
+    *   **Redefinir Senha:** Defina uma nova senha para um usuário que perdeu o acesso.
+    *   Ajuste os vínculos hierárquicos a qualquer momento.
+*   **Remover Usuário:**
+    *   **Atenção:** A exclusão de um usuário é **permanente**. O histórico de ações dele será mantido, mas a conta será removida. Use com cautela.
+
+---
+
+### **4. Supervisão e Análise de Dados**
+
+Como Administrador, você tem acesso irrestrito a todas as ferramentas de visualização e análise, com a visão mais ampla possível.
+
+*   **Processos MPC:** Visualize e edite **qualquer processo** no sistema, de qualquer equipe. Use esta tela para auditorias, correções ou intervenções necessárias.
+*   **Página Analítica (BI):** Utilize o dashboard de Business Intelligence sem filtros. Analise a performance de servidores, gabinetes ou do MPC como um todo. Compare a produtividade entre equipes e identifique tendências globais.
+*   **Gerenciar Afastamentos e Substituições:** Visualize e gerencie os registros de **todos os usuários**, não apenas de uma equipe específica.
+
+---
+
+### **5. Manutenção e Boas Práticas**
+
+*   **Backups:** Verifique regularmente se os backups automáticos estão sendo enviados e recebidos corretamente. Realize backups manuais antes de qualquer alteração crítica no sistema.
+*   **Logs do Worker:** Monitore os logs do processo `worker.py` (se o ambiente de implantação permitir) para garantir que as tarefas agendadas (atualização de status, e-mails, etc.) estão sendo executadas sem erros.
+*   **Revisão de Usuários:** Periodicamente, revise a lista de usuários para desativar ou remover contas de membros que não fazem mais parte do órgão.
+*   **Comunicação:** Utilize os canais de comunicação do órgão para informar os usuários sobre manutenções programadas ou sobre a adição de novos feriados que possam impactar os prazos.
+
+---
+
+### **6. Guia de Solução de Problemas (FAQ) do Administrador**
+
+*   **P: Um usuário informa que não recebeu o e-mail de redefinição de senha. O que fazer?**
+    *   **R:** Verifique três pontos: 1) O login informado pelo usuário está correto? 2) O e-mail cadastrado para ele na tela "Gerenciar Usuários" está correto? 3) Verifique as configurações de e-mail do sistema (credenciais em `st.secrets`). Se tudo estiver correto, você pode redefinir a senha manualmente para ele na tela de edição de usuário.
+
+*   **P: Um prazo foi calculado de forma inesperada. Como investigar?**
+    *   **R:** Verifique a cadeia de fatores: 1) Na aba "Tipos de Produto", confira o prazo e o tipo de contagem (útil/corrido) para aquele produto. 2) Na aba "Gerenciar Feriados", veja se todos os feriados do período estão cadastrados. 3) Em "Gerenciar Afastamentos", verifique se o usuário responsável tinha algum afastamento no período.
+
+*   **P: O sistema parece lento ou apresenta erros de "database is locked".**
+    *   **R:** Este é um sintoma de que o SQLite pode estar atingindo seu limite de concorrência. É um forte indicativo de que o sistema cresceu e está na hora de planejar a migração para um banco de dados mais robusto como o PostgreSQL.
+
+---
+*Este manual fornece o conhecimento necessário para a gestão técnica e estratégica do sistema. Sua atuação é fundamental para a saúde, segurança e eficiência da plataforma.*
