@@ -77,25 +77,31 @@ with st.container():
                 chart_type = st.selectbox("Gráfico:", ["Barra", "Linha", "Área"])
 
         # --- Carregar Dados Mestres (Fetch All) ---
-        qb = QueryBuilder("processos")
+        @st.cache_data(ttl=300, show_spinner=False)
+        def load_processos_data(perfil, uid, s_ids, c_ids):
+            """
+            Carrega dados do Supabase com cache para performance.
+            Argumentos simples (strings/listas) para chave de cache eficiente.
+            """
+            qb = QueryBuilder("processos")
+            
+            # Filtros de Perfil
+            if perfil == "Servidor":
+                qb.eq("id_servidor_responsavel", uid)
+            elif perfil == "Chefe de Gabinete":
+                qb.eq("id_chefe_gabinete", uid)
+                
+            # Filtros de Seleção (listas de IDs)
+            if s_ids: qb.in_list("id_servidor_responsavel", s_ids)
+            if c_ids: qb.in_list("id_chefe_gabinete", c_ids)
+            
+            return qb.fetch_all()
+
+        # Preparar argumentos para cache key
+        s_ids_param = [nomes_servidores[n] for n in filtro_servidor if n in nomes_servidores] if filtro_servidor else []
+        c_ids_param = [nomes_chefes[n] for n in filtro_chefe if n in nomes_chefes] if filtro_chefe else []
         
-        # Filtros de Perfil na Query
-        if perfil_usuario == "Servidor":
-            qb.eq("id_servidor_responsavel", id_usuario)
-        elif perfil_usuario == "Chefe de Gabinete":
-            qb.eq("id_chefe_gabinete", id_usuario)
-            
-        # Filtros de Seleção na Query
-        if filtro_servidor:
-            ids = [nomes_servidores[n] for n in filtro_servidor if n in nomes_servidores]
-            if ids: qb.in_list("id_servidor_responsavel", ids)
-        if filtro_chefe:
-            ids = [nomes_chefes[n] for n in filtro_chefe if n in nomes_chefes]
-            if ids: qb.in_list("id_chefe_gabinete", ids)
-            
-        # IMPORTANTE: Usar fetch_all() para pegar tudo e processar localmente
-        # Isso garante consistência para Acervo e Distribuição
-        raw_data = qb.fetch_all()
+        raw_data = load_processos_data(perfil_usuario, id_usuario, s_ids_param, c_ids_param)
         
         if not raw_data:
             st.warning("Nenhum dado encontrado.")
