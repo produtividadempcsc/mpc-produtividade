@@ -181,7 +181,7 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
             st.area_chart(data)
             
         with st.expander("Ver dados"):
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display, width=1500, hide_index=True)
             
     elif isinstance(data, pd.DataFrame):
         if data.empty:
@@ -197,4 +197,4 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
             st.area_chart(data)
             
         with st.expander("Ver dados"):
-            st.dataframe(data, use_container_width=True)
+            st.dataframe(data, width=1500)
