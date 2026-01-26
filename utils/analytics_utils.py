@@ -174,7 +174,7 @@ def format_and_plot(data, chart_type, title, icon="📈", description=""):
                 color="Valor", color_continuous_scale='viridis'
             )
             fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True, key=title)
+            st.plotly_chart(fig, width="stretch", key=title)
         elif chart_type == "Linha":
             st.line_chart(data)
         else:
