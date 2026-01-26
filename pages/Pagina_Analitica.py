@@ -4,11 +4,11 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 from sidebar import build_sidebar
-from supabase_client import QueryBuilder
-from db_compat import get_user_by_id, get_all_users, get_all_product_types, get_direct_servants
+from supabase_client import QueryBuilder, select_all
+from db_compat import get_all_users, get_all_product_types, get_direct_servants
 from pages.analytics_utils import (
     prepare_master_dataframe, calculate_metrics_servidor, calculate_metrics_chefe,
-    create_metric_card, format_and_plot
+    create_metric_card, format_and_plot, calculate_acervo_snapshot
 )
 import ui_utils
 
@@ -33,7 +33,7 @@ st.markdown('<p class="main-subtitle">Análise avançada de dados e indicadores 
 
 # --- Container Principal ---
 with st.container():
-    with st.spinner("🔄 Carregando e processando dados..."):
+    with st.spinner("🔄 Carregando dados completos... Isso pode levar alguns segundos."):
         
         # Contexto do Usuário
         perfil_usuario = st.session_state.active_perfil
@@ -76,7 +76,7 @@ with st.container():
                 grouping = st.selectbox("Agrupar por:", ["Consolidado", "Mês a Mês", "Ano a Ano"])
                 chart_type = st.selectbox("Gráfico:", ["Barra", "Linha", "Área"])
 
-        # --- Carregar Dados Mestres ---
+        # --- Carregar Dados Mestres (Fetch All) ---
         qb = QueryBuilder("processos")
         
         # Filtros de Perfil na Query
@@ -93,7 +93,9 @@ with st.container():
             ids = [nomes_chefes[n] for n in filtro_chefe if n in nomes_chefes]
             if ids: qb.in_list("id_chefe_gabinete", ids)
             
-        raw_data = qb.execute()
+        # IMPORTANTE: Usar fetch_all() para pegar tudo e processar localmente
+        # Isso garante consistência para Acervo e Distribuição
+        raw_data = qb.fetch_all()
         
         if not raw_data:
             st.warning("Nenhum dado encontrado.")
@@ -106,32 +108,41 @@ with st.container():
         df_servidor = calculate_metrics_servidor(df_master)
         df_chefe = calculate_metrics_chefe(df_master)
 
-        # Filtros de Data nos DataFrames Calculados
+        # Filtros de Data nos DataFrames Calculados (Para abas de Produtividade)
+        df_servidor_filtered = pd.DataFrame()
         if not df_servidor.empty:
-            df_servidor = df_servidor[
+            df_servidor_filtered = df_servidor[
                 (df_servidor['data_conclusao_servidor'].dt.date >= f_ini) &
                 (df_servidor['data_conclusao_servidor'].dt.date <= f_fim)
             ]
             
+        df_chefe_filtered = pd.DataFrame()
         if not df_chefe.empty:
-            df_chefe = df_chefe[
+            df_chefe_filtered = df_chefe[
                 (df_chefe['data_conclusao_chefe'].dt.date >= f_ini) &
                 (df_chefe['data_conclusao_chefe'].dt.date <= f_fim)
             ]
 
-        # --- Renderização das Abas ---
-        tabs = st.tabs(["👤 Produtividade Servidor", "🏢 Produtividade Gabinete", "⚖️ Carga de Trabalho"])
+        # --- Renderização das Abas Completas ---
+        tabs = st.tabs([
+            "👤 Produtividade Servidor", 
+            "🏢 Produtividade Gabinete", 
+            "⚖️ Carga de Trabalho",
+            "📊 Análise de Distribuição",
+            "📚 Análise de Acervo",
+            "↩️ Análise de Devoluções"
+        ])
         
         # --- ABA 1: SERVIDOR ---
         with tabs[0]:
             st.header("Análise de Produtividade - Servidores")
-            if df_servidor.empty:
+            if df_servidor_filtered.empty:
                 st.info("Sem dados de conclusão neste período.")
             else:
                 c1, c2, c3 = st.columns(3)
-                total = len(df_servidor)
-                tempo_medio = df_servidor['duracao_servidor'].mean()
-                no_prazo = (df_servidor['no_prazo_servidor'].sum() / total * 100) if total > 0 else 0
+                total = len(df_servidor_filtered)
+                tempo_medio = df_servidor_filtered['duracao_servidor'].mean()
+                no_prazo = (df_servidor_filtered['no_prazo_servidor'].sum() / total * 100) if total > 0 else 0
                 
                 c1.markdown(create_metric_card(f"{total}", "Concluídos", "📋"), unsafe_allow_html=True)
                 c2.markdown(create_metric_card(f"{tempo_medio:.1f}", "Média Dias", "⏱️"), unsafe_allow_html=True)
@@ -139,43 +150,44 @@ with st.container():
                 
                 # Gráficos
                 if grouping == "Consolidado":
-                    data = df_servidor.groupby('servidor_nome')['id'].count().sort_values()
+                    data = df_servidor_filtered.groupby('servidor_nome')['id'].count().sort_values()
                     format_and_plot(data, "Barra", "Processos por Servidor")
                 else:
                     period = 'M' if grouping == "Mês a Mês" else 'Y'
-                    df_servidor['periodo'] = df_servidor['data_conclusao_servidor'].dt.to_period(period).astype(str)
-                    data = df_servidor.pivot_table(index='periodo', columns='servidor_nome', values='id', aggfunc='count').fillna(0)
+                    df_servidor_filtered['periodo'] = df_servidor_filtered['data_conclusao_servidor'].dt.to_period(period).astype(str)
+                    data = df_servidor_filtered.pivot_table(index='periodo', columns='servidor_nome', values='id', aggfunc='count').fillna(0)
                     format_and_plot(data, chart_type, "Evolução Temporal")
 
         # --- ABA 2: GABINETE ---
         with tabs[1]:
             st.header("Análise de Produtividade - Gabinetes")
-            if df_chefe.empty:
+            if df_chefe_filtered.empty:
                 st.info("Sem dados de revisão neste período.")
             else:
                 c1, c2, c3 = st.columns(3)
-                total = len(df_chefe)
-                tempo_medio = df_chefe['duracao_revisao_chefe'].mean()
-                no_prazo = (df_chefe['revisao_no_prazo'].sum() / total * 100) if total > 0 else 0
+                total = len(df_chefe_filtered)
+                tempo_medio = df_chefe_filtered['duracao_revisao_chefe'].mean()
+                no_prazo = (df_chefe_filtered['revisao_no_prazo'].sum() / total * 100) if total > 0 else 0
                 
                 c1.markdown(create_metric_card(f"{total}", "Revisados", "📋"), unsafe_allow_html=True)
                 c2.markdown(create_metric_card(f"{tempo_medio:.1f}", "Média Dias", "⏱️"), unsafe_allow_html=True)
                 c3.markdown(create_metric_card(f"{no_prazo:.1f}%", "No Prazo", "✅"), unsafe_allow_html=True)
                 
                 if grouping == "Consolidado":
-                    data = df_chefe.groupby('chefe_gabinete_nome')['id'].count().sort_values()
+                    data = df_chefe_filtered.groupby('chefe_gabinete_nome')['id'].count().sort_values()
                     format_and_plot(data, "Barra", "Revisões por Gabinete")
                 else:
                     period = 'M' if grouping == "Mês a Mês" else 'Y'
-                    df_chefe['periodo'] = df_chefe['data_conclusao_chefe'].dt.to_period(period).astype(str)
-                    data = df_chefe.pivot_table(index='periodo', columns='chefe_gabinete_nome', values='id', aggfunc='count').fillna(0)
+                    df_chefe_filtered['periodo'] = df_chefe_filtered['data_conclusao_chefe'].dt.to_period(period).astype(str)
+                    data = df_chefe_filtered.pivot_table(index='periodo', columns='chefe_gabinete_nome', values='id', aggfunc='count').fillna(0)
                     format_and_plot(data, chart_type, "Evolução de Revisões")
 
-        # --- ABA 3: CARGA DE TRABALHO ---
+        # --- ABA 3: CARGA DE TRABALHO (Atual) ---
         with tabs[2]:
             st.header("Carga de Trabalho Atual")
             
-            # Processos Ativos (Sem Data Conclusão Chefe)
+            # Processos Ativos Totais (Sem Data Conclusão Chefe ou Servidor)
+            # Para carga atual, olhamos o "Retrato de Agora"
             df_ativos = df_master[pd.isna(df_master['data_conclusao_chefe'])].copy()
             
             if df_ativos.empty:
@@ -198,3 +210,100 @@ with st.container():
                 if not df_fase_chefe.empty:
                     data_chefe = df_fase_chefe['chefe_gabinete_nome'].value_counts()
                     format_and_plot(data_chefe, "Barra", "Processos em Revisão (Gabinete)")
+
+        # --- ABA 4: DISTRIBUIÇÃO ---
+        with tabs[3]:
+            st.header("Análise de Distribuição (Entrada)")
+            st.caption("Processos que entraram (foram atribuídos) no período selecionado.")
+            
+            df_entrada = df_master[
+                (df_master['data_atribuicao_servidor'].dt.date >= f_ini) &
+                (df_master['data_atribuicao_servidor'].dt.date <= f_fim)
+            ]
+            
+            if df_entrada.empty:
+                st.info("Nenhuma distribuição no período.")
+            else:
+                st.metric("Total Distribuído", len(df_entrada))
+                
+                if grouping == "Consolidado":
+                    data_serv = df_entrada['servidor_nome'].value_counts()
+                    format_and_plot(data_serv, "Barra", "Distribuição por Servidor")
+                    
+                    data_chefe = df_entrada['chefe_gabinete_nome'].value_counts()
+                    format_and_plot(data_chefe, "Barra", "Distribuição por Gabinete")
+                else:
+                    period = 'M' if grouping == "Mês a Mês" else 'Y'
+                    df_entrada['periodo'] = df_entrada['data_atribuicao_servidor'].dt.to_period(period).astype(str)
+                    
+                    data = df_entrada.pivot_table(index='periodo', columns='servidor_nome', values='id', aggfunc='count').fillna(0)
+                    format_and_plot(data, chart_type, "Evolução da Distribuição")
+        
+        # --- ABA 5: ACERVO (Retrato no Tempo) ---
+        with tabs[4]:
+            st.header("Análise de Acervo (Retrato Histórico)")
+            st.caption("Como estava a fila de processos em uma data específica do passado.")
+            
+            data_ref = st.date_input("📅 Data de Referência", value=date.today())
+            data_ref_ts = pd.to_datetime(data_ref)
+            
+            acervo_serv_snap, acervo_chefe_snap = calculate_acervo_snapshot(df_master, data_ref_ts)
+            
+            c1, c2 = st.columns(2)
+            c1.metric(f"Acervo Servidores em {data_ref.strftime('%d/%m')}", len(acervo_serv_snap))
+            c2.metric(f"Acervo Revisão em {data_ref.strftime('%d/%m')}", len(acervo_chefe_snap))
+            
+            if not acervo_serv_snap.empty:
+                format_and_plot(acervo_serv_snap['servidor_nome'].value_counts(), "Barra", "Acervo por Servidor (Snapshot)")
+                
+            if not acervo_chefe_snap.empty:
+                format_and_plot(acervo_chefe_snap['chefe_gabinete_nome'].value_counts(), "Barra", "Acervo por Gabinete (Snapshot)")
+
+        # --- ABA 6: DEVOLUÇÕES ---
+        with tabs[5]:
+            st.header("Análise de Devoluções")
+            st.caption("Processos que retornaram do Chefe para o Servidor.")
+            
+            # Buscar histórico de devoluções separadamente para não pesar a query principal se não precisar
+            # Mas aqui faremos query específica
+            qb_dev = QueryBuilder("processos_historico")
+            qb_dev.eq("evento", "Devolvido pelo Chefe")
+            # Filtrar por data do evento se possível, mas processes_histórico pode não ter data fácil de filtrar direto se for JSON
+            # Assumindo coluna 'timestamp' ou 'created_at'
+            # Vamos pegar tudo e filtrar no pandas por segurança se não soubermos o nome exato da coluna de data
+            # Ajuste conforme seu schema real: 'created_at'
+            
+            with st.spinner("Buscando histórico de devoluções..."):
+                hist_data = qb_dev.fetch_all() # Pode ser pesado, ideal filtrar por data
+            
+            if not hist_data:
+                st.info("Nenhuma devolução registrada.")
+            else:
+                df_hist = pd.DataFrame(hist_data)
+                df_hist['created_at'] = pd.to_datetime(df_hist['created_at'], errors='coerce') # Ajuste nome coluna se precisar
+                
+                # Filtrar período
+                df_hist_filtered = df_hist[
+                    (df_hist['created_at'].dt.date >= f_ini) &
+                    (df_hist['created_at'].dt.date <= f_fim)
+                ]
+                
+                if df_hist_filtered.empty:
+                    st.info("Nenhuma devolução neste período.")
+                else:
+                    # Precisamos saber QUEM sofreu a devolução. O histórico tem id_processo.
+                    # Join manual com df_master
+                    df_join = df_hist_filtered.merge(
+                        df_master[['id', 'servidor_nome', 'chefe_gabinete_nome']], 
+                        left_on='id_processo', 
+                        right_on='id', 
+                        how='inner'
+                    )
+                    
+                    st.metric("Total Devoluções", len(df_join))
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        format_and_plot(df_join['servidor_nome'].value_counts(), "Barra", "Devoluções por Servidor")
+                    with c2:
+                        format_and_plot(df_join['chefe_gabinete_nome'].value_counts(), "Barra", "Devoluções por Gabinete")
