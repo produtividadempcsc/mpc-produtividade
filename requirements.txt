@@ -9,7 +9,7 @@ pytz
 openpyxl
 fpdf
 fpdf2
-google-generativeai
+google-genai
 PyMuPDF
 plotly
 python-docx
