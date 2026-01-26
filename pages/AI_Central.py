@@ -37,7 +37,7 @@ ui_utils.load_css("styles/prompt_bank.css")
 try:
     client = genai.Client(api_key=auth.GEMINI_API_KEY)
     # O modelo é especificado na chamada agora, mas podemos definir uma constante
-    MODEL_ID = 'gemini-2.0-flash' # Atualizado para um modelo mais recente se possível, ou manter o equivalente
+    MODEL_ID = 'gemini-3-flash-preview' # Atualizado para um modelo mais recente se possível, ou manter o equivalente
 except Exception as e:
     st.error(f"Erro ao configurar o cliente Gemini. Verifique a chave da API em auth.py. Erro: {e}")
     st.stop()
@@ -641,3 +641,4 @@ with tabs[1]:
 
 with tabs[2]:
     render_prompt_bank()
+
