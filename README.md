@@ -1,4 +1,4 @@
-# Sistema de Gestão de Produtividade - V7
+# Sistema de Gestão de Produtividade
 ### Ministério Público de Contas do Estado de Santa Catarina (MPC/SC)
 
 Este sistema é uma aplicação web desenvolvida em **Streamlit** para o gerenciamento de produtividade, controle de prazos processuais e automação de relatórios do MPC/SC.
@@ -113,3 +113,4 @@ O sistema estará acessível em: `http://localhost:8501`
 ## 📝 Licença
 Desenvolvido para uso interno do Ministério Público de Contas de Santa Catarina.
 Todos os direitos reservados.
+
