@@ -3,6 +3,7 @@ Supabase Client - Singleton para conexão com Supabase via REST API
 ===================================================================
 Este módulo substitui a conexão direta PostgreSQL por chamadas REST HTTPS,
 resolvendo problemas de IPv4/IPv6.
+
 """
 
 import os
@@ -322,7 +323,7 @@ class QueryBuilder:
     
     def execute(self):
         """
-        Executa a query e retorna os dados.
+        Executa a query e retorna os dados (respeitando limite default do Supabase).
         
         Returns:
             Lista de dicionários com os resultados
@@ -370,6 +371,67 @@ class QueryBuilder:
         except Exception as e:
             print(f"[SUPABASE] Erro na query de {self.table_name}: {e}")
             return []
+
+    def fetch_all(self):
+        """
+        Executa a query e retorna TODOS os dados, paginando automaticamente.
+        Ignora limit() e offset() configurados manualmente.
+        
+        Returns:
+            Lista de dicionários completa
+        """
+        all_data = []
+        page_size = 1000
+        current_offset = 0
+        
+        try:
+            while True:
+                # Reconstruir query base
+                query = supabase.table(self.table_name).select(self._columns)
+                
+                # Reaplicar filtros
+                for filter_type, column, value in self._filters:
+                    if filter_type == "eq": query = query.eq(column, value)
+                    elif filter_type == "neq": query = query.neq(column, value)
+                    elif filter_type == "gt": query = query.gt(column, value)
+                    elif filter_type == "gte": query = query.gte(column, value)
+                    elif filter_type == "lt": query = query.lt(column, value)
+                    elif filter_type == "lte": query = query.lte(column, value)
+                    elif filter_type == "like": query = query.like(column, value)
+                    elif filter_type == "ilike": query = query.ilike(column, value)
+                    elif filter_type == "is": query = query.is_(column, value)
+                    elif filter_type == "not.is": query = query.not_.is_(column, value)
+                    elif filter_type == "in": query = query.in_(column, value)
+
+                # Ordenação (importante para paginação estável)
+                if self._order_column:
+                    query = query.order(self._order_column, desc=self._order_desc)
+                else:
+                    # Default sort by id se existir, para estabilidade
+                    query = query.order("id", desc=True)
+
+                # Paginação
+                page_query = query.range(current_offset, current_offset + page_size - 1)
+                
+                result = page_query.execute()
+                data = result.data
+                
+                if not data:
+                    break
+                    
+                all_data.extend(data)
+                
+                if len(data) < page_size:
+                    break
+                    
+                current_offset += page_size
+                
+            return all_data
+            
+        except Exception as e:
+            print(f"[SUPABASE] Erro no fetch_all de {self.table_name}: {e}")
+            return all_data
+
     
     def first(self):
         """Retorna apenas o primeiro resultado."""
