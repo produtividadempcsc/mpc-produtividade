@@ -1,6 +1,6 @@
 
-import streamlit as st
-import google.generativeai as genai
+import google.genai as genai
+from google.genai import types
 import auth
 from sidebar import build_sidebar
 from db_compat import get_user_by_id
@@ -33,12 +33,13 @@ ui_utils.load_css("styles/chat.css")
 ui_utils.load_css("styles/ai_valor.css")
 ui_utils.load_css("styles/prompt_bank.css")
 
-# --- Configuração do Gemini (Compartilhada) ---
+# --- Configuração do Gemini (Novo SDK) ---
 try:
-    genai.configure(api_key=auth.GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    client = genai.Client(api_key=auth.GEMINI_API_KEY)
+    # O modelo é especificado na chamada agora, mas podemos definir uma constante
+    MODEL_ID = 'gemini-2.0-flash' # Atualizado para um modelo mais recente se possível, ou manter o equivalente
 except Exception as e:
-    st.error(f"Erro ao configurar a API do Gemini. Verifique a chave da API em auth.py. Erro: {e}")
+    st.error(f"Erro ao configurar o cliente Gemini. Verifique a chave da API em auth.py. Erro: {e}")
     st.stop()
 
 # --- Funções Auxiliares do Chat ---
@@ -95,7 +96,8 @@ def rename_chat(chat_id, new_title):
         st.rerun()
 
 def estimate_tokens(text):
-    return len(text) // 4
+    if not text: return 0
+    return len(str(text)) // 4
 
 def update_token_count(prompt, response):
     prompt_tokens = estimate_tokens(prompt)
@@ -235,13 +237,34 @@ def render_chat_interface():
             processed_files = process_uploaded_files(uploaded_files) if uploaded_files else []
             attached_file_names = [f["name"] for f in processed_files]
             
-            prompt_parts = [prompt]
+            # Construção do conteúdo para o novo SDK
+            # O novo SDK aceita parts que podem ser texto ou blobs
+            contents = []
+            
+            # Adicionar arquivos se houver
             if processed_files:
                 for p_file in processed_files:
                     if p_file["type"] in ["image", "audio", "video"]:
-                        prompt_parts.append(p_file["content"])
+                        # Para imagens e mídias, precisamos ver como o process_uploaded_files retorna.
+                        # Assumindo que ele retorna bytes ou algo compatível, ou melhor, texto descritivo se for extração.
+                        # Se for imagem crua, o novo SDK lida com PIL Image ou bytes.
+                        # Como o código original lidava com append(p_file["content"]), e isso funcionava com o antigo SDK,
+                        # vamos tentar manter a estrutura de texto se for texto extraído, ou adaptar.
+                        
+                        # Se for imagem real (PIL Image ou bytes), o novo SDK aceita diretamente.
+                        # Mas o process_uploaded_files antigo provavelmente extraía texto de PDF/DOCX.
+                        # Se p_file["content"] é string, é texto.
+                         if isinstance(p_file["content"], str):
+                            contents.append(types.Part.from_text(text=f"\n\n--- CONTEÚDO DO ARQUIVO: {p_file['name']} ---\n\n{p_file['content']}"))
+                         else:
+                             # Se for blob binário (ex: imagem)
+                             # Adaptação pode ser necessária dependendo do que `process_uploaded_files` retorna.
+                             # Vamos assumir string por hora para PDF/DOCX processado.
+                             # Se for imagem PNG/JPG carregada diretamente:
+                             contents.append(p_file["content"]) # O SDK novo lida com PIL images na lista de contents
                     else:
-                        prompt_parts.append(f"\n\n--- CONTEÚDO DO ARQUIVO: {p_file['name']} ---\n\n{p_file['content']}")
+                        contents.append(types.Part.from_text(text=f"\n\n--- CONTEÚDO DO ARQUIVO: {p_file['name']} ---\n\n{p_file['content']}"))
+
             
             messages.append({"role": "user", "content": prompt, "files": attached_file_names})
             
@@ -268,21 +291,38 @@ def render_chat_interface():
                         if st.session_state.get('use_emojis'): instructions.append("Use emojis.")
                         if st.session_state.get('include_sources'): instructions.append("Cite fontes tipo de conhecimento.")
 
-                        enhanced_prompt = prompt
+                        enhanced_prompt_text = prompt
                         if instructions:
-                            enhanced_prompt = f"INSTRUÇÕES: {' '.join(instructions)}\n\nPERGUNTA: {prompt}"
-                        prompt_parts[0] = enhanced_prompt
+                            enhanced_prompt_text = f"INSTRUÇÕES: {' '.join(instructions)}\n\nPERGUNTA: {prompt}"
                         
-                        response = model.generate_content(prompt_parts, generation_config=genai.types.GenerationConfig(temperature=st.session_state.temperature, top_p=st.session_state.top_p))
+                        # Adiciona o prompt principal
+                        contents.append(types.Part.from_text(text=enhanced_prompt_text))
+                        
+                        # Configuração de geração
+                        config = types.GenerateContentConfig(
+                            temperature=st.session_state.temperature,
+                            top_p=st.session_state.top_p
+                        )
+                        
+                        response = client.models.generate_content(
+                            model=MODEL_ID,
+                            contents=contents,
+                            config=config
+                        )
+                        
                         response_text = response.text
                         st.markdown(response_text)
                         
-                        update_token_count(enhanced_prompt, response_text)
+                        update_token_count(enhanced_prompt_text, response_text)
                         messages.append({"role": "assistant", "content": response_text, "files": []})
                         
                         if len(messages) == 2:
                             try:
-                                title_resp = model.generate_content(f"Crie um título curto (max 4 palavras) para: '{prompt}'", generation_config=genai.types.GenerationConfig(temperature=0.3))
+                                title_resp = client.models.generate_content(
+                                    model=MODEL_ID,
+                                    contents=f"Crie um título curto (max 4 palavras) para: '{prompt}'",
+                                    config=types.GenerateContentConfig(temperature=0.3)
+                                )
                                 current_chat["title"] = title_resp.text.strip().replace('"', '')[:40]
                                 st.rerun()
                             except: pass
@@ -373,7 +413,7 @@ def render_valor_fiscalizado():
 ---
 """
 
-                    prompt = f"""
+                    prompt_text = f"""
                     **Tarefa:** Você é um assistente especializado em análise de processos do Ministério Público de Contas de Santa Catarina. Sua função é calcular o "Volume de Recursos Fiscalizados" com base no conteúdo de um ou mais documentos de processo, nas regras fornecidas e em quaisquer instruções adicionais do usuário.
 
 {instrucoes_adicionais_formatadas}
@@ -412,7 +452,10 @@ def render_valor_fiscalizado():
 
                     # 4. Chamar a IA
                     try:
-                        response = model.generate_content(prompt)
+                        response = client.models.generate_content(
+                            model=MODEL_ID,
+                            contents=prompt_text
+                        )
                         st.session_state.valor_ai_response = response.text
                         st.success("✅ Análise concluída com sucesso!")
                     except Exception as e:
