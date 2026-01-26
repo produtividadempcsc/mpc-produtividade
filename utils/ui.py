@@ -104,7 +104,7 @@ def display_file(file_content: bytes, file_name: str):
                 data=file_content,
                 file_name=file_name,
                 mime="application/pdf",
-                use_container_width=True,
+                width='stretch',
                 type="primary",
                 help="Clique aqui para baixar o arquivo PDF."
             )
@@ -119,7 +119,7 @@ def display_file(file_content: bytes, file_name: str):
                 data=file_content,
                 file_name=file_name,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
+                width='stretch',
                 type="primary"
             )
             st.info("Tentando gerar uma pré-visualização do documento. Se falhar, use o download.")
@@ -156,7 +156,7 @@ def display_file(file_content: bytes, file_name: str):
                 label=f"⬇️ Baixar {file_name}",
                 data=file_content,
                 file_name=file_name,
-                use_container_width=True
+                width='stretch'
             )
             
     except Exception as e:
@@ -234,19 +234,19 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                 with b1:
                     if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path == 'Pages/Meus_Processos.py':
                         if status_serv not in ["Concluído", "Finalizado"]:
-                            if st.button("Atualizar", key=f"fav_update_serv_{pid}", type="primary", use_container_width=True):
+                            if st.button("Atualizar", key=f"fav_update_serv_{pid}", type="primary", width='stretch'):
                                 st.session_state['processo_para_atualizar_id'] = pid
                                 st.rerun()
                     elif active_perfil in ["Procurador", "Administrador"] and current_page_path == 'Pages/Processos_MPC.py':
-                        if st.button("Editar", key=f"fav_edit_mpc_{pid}", use_container_width=True):
+                        if st.button("Editar", key=f"fav_edit_mpc_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
                     elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_para_Revisao.py':
-                         if st.button("Analisar", key=f"fav_analise_rev_{pid}", type="primary", use_container_width=True):
+                         if st.button("Analisar", key=f"fav_analise_rev_{pid}", type="primary", width='stretch'):
                             st.session_state['processo_em_analise_id'] = pid
                             st.rerun()
                     elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_no_Gabinete.py':
-                        if st.button("Editar", key=f"fav_edit_gab_{pid}", use_container_width=True):
+                        if st.button("Editar", key=f"fav_edit_gab_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
                 
@@ -256,13 +256,13 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                     tem_nao_lidos = has_unread_comments(pid, user_id)
                     lbl = "Comentários" + (" (!)" if tem_nao_lidos else "")
                     typ = "primary" if tem_nao_lidos else "secondary"
-                    if st.button(lbl, key=f"fav_comments_{pid}", use_container_width=True, type=typ):
+                    if st.button(lbl, key=f"fav_comments_{pid}", width='stretch', type=typ):
                         st.session_state['processo_id'] = pid
                         st.session_state['came_from'] = current_page_path
                         st.switch_page('Pages/Comentarios_Processo.py')
 
                 with b4:
-                    if st.button("Histórico", key=f"fav_hist_{pid}", use_container_width=True):
+                    if st.button("Histórico", key=f"fav_hist_{pid}", width='stretch'):
                         st.session_state.history_visible_fav[pid] = not st.session_state.history_visible_fav.get(pid, False)
                         st.rerun()
 
@@ -332,19 +332,19 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                 with b1:
                     if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path == 'Pages/Meus_Processos.py':
                         if status_serv not in ["Concluído", "Finalizado"]:
-                            if st.button("Atualizar Andamento", key=f"susp_update_serv_{pid}", type="primary", use_container_width=True):
+                            if st.button("Atualizar Andamento", key=f"susp_update_serv_{pid}", type="primary", width='stretch'):
                                 st.session_state['processo_para_atualizar_id'] = pid
                                 st.rerun()
                     elif active_perfil in ["Procurador", "Administrador"] and current_page_path == 'Pages/Processos_MPC.py':
-                        if st.button("Editar Processo", key=f"susp_edit_mpc_{pid}", use_container_width=True):
+                        if st.button("Editar Processo", key=f"susp_edit_mpc_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
                     elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_para_Revisao.py':
-                         if st.button("Analisar Processo", key=f"susp_analise_rev_{pid}", type="primary", use_container_width=True):
+                         if st.button("Analisar Processo", key=f"susp_analise_rev_{pid}", type="primary", width='stretch'):
                             st.session_state['processo_em_analise_id'] = pid
                             st.rerun()
                     elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_no_Gabinete.py':
-                        if st.button("Editar Processo", key=f"susp_edit_gab_{pid}", use_container_width=True):
+                        if st.button("Editar Processo", key=f"susp_edit_gab_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
 
@@ -352,13 +352,13 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                     tem_nao_lidos = has_unread_comments(pid, user_id)
                     lbl = "Comentário Não Lido" if tem_nao_lidos else "Comentários"
                     typ = "primary" if tem_nao_lidos else "secondary"
-                    if st.button(lbl, key=f"susp_comments_{pid}", use_container_width=True, type=typ):
+                    if st.button(lbl, key=f"susp_comments_{pid}", width='stretch', type=typ):
                         st.session_state['processo_id'] = pid
                         st.session_state['came_from'] = current_page_path
                         st.switch_page('Pages/Comentarios_Processo.py')
 
                 with b3:
-                    if st.button("Ver Histórico", key=f"susp_hist_{pid}", use_container_width=True):
+                    if st.button("Ver Histórico", key=f"susp_hist_{pid}", width='stretch'):
                         st.session_state.history_visible_susp[pid] = not st.session_state.history_visible_susp.get(pid, False)
                         st.rerun()
 
