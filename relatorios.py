@@ -235,7 +235,8 @@ def calcular_metricas_mensais(mes, ano):
                 'prazo_total_dias_suspenso': p.get('prazo_total_dias_suspenso', 0),
                 'status_servidor': p.get('status_servidor'),
                 'status_chefe': p.get('status_chefe'),
-                'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis')
+                'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis'),
+                'data_finalizacao': p.get('data_finalizacao') # Adicionado para Metrica 8
             })
         
         df_full = pd.DataFrame(data)
@@ -245,7 +246,7 @@ def calcular_metricas_mensais(mes, ano):
         # Data de corte para o relatório (último dia do mês)
         report_cutoff_dt = pd.to_datetime(end_date)
 
-        for col in ['data_atribuicao_servidor', 'data_conclusao_servidor', 'data_conclusao_chefe']:
+        for col in ['data_atribuicao_servidor', 'data_conclusao_servidor', 'data_conclusao_chefe', 'data_finalizacao']:  # Added data_finalizacao
             df_full[col] = pd.to_datetime(df_full[col], errors='coerce')
 
         df_servidor_concluido = df_full.dropna(subset=['data_atribuicao_servidor', 'data_conclusao_servidor']).copy()
@@ -266,55 +267,89 @@ def calcular_metricas_mensais(mes, ano):
         )
         df_chefe_concluido['no_prazo_chefe'] = df_chefe_concluido['data_conclusao_chefe'].dt.date <= df_chefe_concluido['data_final_chefe']
         
+        # Dataframes já filtrados por data (snapshotted pelas datas)
         df_servidor_mes = df_servidor_concluido[df_servidor_concluido['data_conclusao_servidor'].dt.date.between(start_date, end_date)]
         df_chefe_mes = df_chefe_concluido[df_chefe_concluido['data_conclusao_chefe'].dt.date.between(start_date, end_date)]
         
-        m_servidor = {
-            'avg_dias': df_servidor_mes.groupby('id_servidor_responsavel')['duracao_servidor'].mean(),
-            'pct_prazo': df_servidor_mes.groupby('id_servidor_responsavel')['no_prazo_servidor'].apply(_calculate_percentage),
-            # Acervo: processos não concluídos até o fim do mês, excluindo status finalizados (evita acervo fantasma)
-            'acervo': df_full[
-                df_full['data_conclusao_servidor'].isnull() & 
-                (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) & 
-                (~df_full['status_servidor'].isin(['Concluído', 'Finalizado', 'Processo com o Procurador']))
-            ].groupby('id_servidor_responsavel').size()
-        }
-        m_chefe = {
-            'avg_dias_revisao': df_chefe_mes.groupby('id_chefe_gabinete')['duracao_revisao_chefe'].mean(),
-            'pct_prazo_revisao': df_chefe_mes.groupby('id_chefe_gabinete')['no_prazo_chefe'].apply(_calculate_percentage),
-            'num_revisados': df_chefe_mes.groupby('id_chefe_gabinete').size(),
-            # Acervo revisão: processos concluídos pelo servidor mas não revisados até o fim do mês, excluindo status finalizados (evita acervo fantasma)
-            'acervo_revisao': df_full[
-                df_full['data_conclusao_servidor'].notnull() & 
-                df_full['data_conclusao_chefe'].isnull() & 
-                (df_full['data_conclusao_servidor'] <= report_cutoff_dt) & 
-                (~df_full['status_chefe'].isin(['Finalizado', 'Processo com o Procurador']))
-            ].groupby('id_chefe_gabinete').size()
-        }
+        # Mapeamento de ID -> Nome Procurador
+        procurador_names = {pid: pdata['nome'] for pid, pdata in hierarchy['procuradores'].items()}
 
         metricas_finais = {}
-        todos_procuradores = hierarchy['procuradores']
-
+        
+        # 1) Média de dias (Servidor)
+        # Agrupa pelo id_procurador gravado no registro (Histórico correto)
+        m1 = df_servidor_mes.groupby('id_procurador')['duracao_servidor'].mean()
         metricas_finais["1) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = {
-            pdata['nome']: m_servidor['avg_dias'].reindex([sid for cid in pdata['chefes'] for sid in hierarchy['chefes'].get(cid, {}).get('servidores', [])]).mean() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names
         }
+
+        # 2) Percentual no prazo (Servidor)
+        m2 = df_servidor_mes.groupby('id_procurador')['no_prazo_servidor'].apply(_calculate_percentage)
         metricas_finais["2) Percentual de processos concluídos no prazo por pareceristas(visão média por procurador)"] = {
-            pdata['nome']: m_servidor['pct_prazo'].reindex([sid for cid in pdata['chefes'] for sid in hierarchy['chefes'].get(cid, {}).get('servidores', [])]).mean() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m2.items() if pid in procurador_names
         }
+
+        # 3) Acervo Servidor (Snapshot)
+        m3_df = df_full[
+            (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) & 
+            (
+                (df_full['data_conclusao_servidor'].isnull()) | 
+                (df_full['data_conclusao_servidor'] > report_cutoff_dt)
+            )
+        ]
+        m3 = m3_df.groupby('id_procurador').size()
         metricas_finais["3) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = {
-            pdata['nome']: m_servidor['acervo'].reindex([sid for cid in pdata['chefes'] for sid in hierarchy['chefes'].get(cid, {}).get('servidores', [])]).sum() for _, pdata in todos_procuradores.items()
+             procurador_names.get(pid, f"ID {pid}"): val for pid, val in m3.items() if pid in procurador_names
         }
+        
+        # 4) Número revisados (Chefe)
+        m4 = df_chefe_mes.groupby('id_procurador').size()
         metricas_finais["4) Número de processos revisados no mês por chefe de gabinete (visão média por procurador)"] = {
-            pdata['nome']: m_chefe['num_revisados'].reindex(pdata['chefes']).sum() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m4.items() if pid in procurador_names
         }
+
+        # 5) Média dias revisão (Chefe)
+        m5 = df_chefe_mes.groupby('id_procurador')['duracao_revisao_chefe'].mean()
         metricas_finais["5) Média de dias que os chefes de gabinete demoraram para finalizar a revisão do processo (visão média por procurador)"] = {
-            pdata['nome']: m_chefe['avg_dias_revisao'].reindex(pdata['chefes']).mean() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m5.items() if pid in procurador_names
         }
+
+        # 6) Percentual revisão no prazo (Chefe)
+        m6 = df_chefe_mes.groupby('id_procurador')['no_prazo_chefe'].apply(_calculate_percentage)
         metricas_finais["6) Percentual de processos revisados pelos chefes de gabinetes no prazo (visão média por procurador)"] = {
-            pdata['nome']: m_chefe['pct_prazo_revisao'].reindex(pdata['chefes']).mean() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m6.items() if pid in procurador_names
         }
+
+        # 7) Acervo Revisão (Snapshot)
+        m7_df = df_full[
+            (df_full['data_conclusao_servidor'] <= report_cutoff_dt) & 
+            (
+                (df_full['data_conclusao_chefe'].isnull()) | 
+                (df_full['data_conclusao_chefe'] > report_cutoff_dt)
+            )
+        ]
+        m7 = m7_df.groupby('id_procurador').size()
         metricas_finais["7) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = {
-            pdata['nome']: m_chefe['acervo_revisao'].reindex(pdata['chefes']).sum() for _, pdata in todos_procuradores.items()
+            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m7.items() if pid in procurador_names
+        }
+
+        # 8) Acervo com Procurador (Snapshot)
+        # Chefe concluiu até data corte E (Não finalizado OU finalizado depois da data corte)
+        # Assumindo que status 'Finalizado' ou similar marca o fim do fluxo.
+        # Se houver uma data_finalizacao_procurador ou apenas status, precisamos usar o campo correto.
+        # Vou usar data_finalizacao se existir, ou inferir.
+        # Por enquanto, vou adicionar a lógica baseada na data_conclusao_chefe e inexistência de data posterior (data_finalizacao).
+        
+        m8_df = df_full[
+            (df_full['data_conclusao_chefe'] <= report_cutoff_dt) & 
+            (
+                (df_full['data_finalizacao'].isnull()) | 
+                (df_full['data_finalizacao'] > report_cutoff_dt)
+            )
+        ]
+        m8 = m8_df.groupby('id_procurador').size()
+        metricas_finais["8) Acervo de processo revisados pelo chefe de gabinete que estão com o procurador (visão média por procurador)"] = {
+             procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names
         }
 
         return metricas_finais
