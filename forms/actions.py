@@ -67,8 +67,7 @@ def display_analise_form(processo_id):
             QueryBuilder("processo_favoritos") \
                 .eq("id_usuario", st.session_state.user_id) \
                 .eq("id_processo", pid) \
-                .delete() \
-                .execute()
+                .delete()
             
             update_process(pid, updates)
             st.success("Processo enviado para o Procurador!")
@@ -235,8 +234,7 @@ def display_servidor_update_form(processo_id):
             QueryBuilder("processo_favoritos") \
                 .eq("id_usuario", st.session_state.user_id) \
                 .eq("id_processo", pid) \
-                .delete() \
-                .execute()
+                .delete()
             st.toast(f"Processo {p_num} removido dos seus favoritos ao ser concluído.")
 
             update_process(pid, updates)
