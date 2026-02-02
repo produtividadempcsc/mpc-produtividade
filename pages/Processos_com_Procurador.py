@@ -852,8 +852,8 @@ try:
             'Nº Processo': p.get('processo_numero'),
             'Servidor': usuarios_cache.get(p.get('id_servidor_responsavel'), "N/A"),
             'Produto': produtos_cache.get(p.get('id_tipo_produto'), {}).get('nome_produto', 'N/A'),
-            'Status': p.get('status_chefe'),
-            'Data de Envio': date.fromisoformat(p.get('data_conclusao_chefe')).strftime('%d/%m/%Y') if p.get('data_conclusao_chefe') else "N/A"
+            'Status Geral': p.get('status_chefe'),
+            'Data Final': date.fromisoformat(p.get('data_conclusao_chefe')).strftime('%d/%m/%Y') if p.get('data_conclusao_chefe') else "N/A"
         } for p in processos_com_procurador])
 
         st.download_button(
