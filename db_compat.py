@@ -316,8 +316,7 @@ def toggle_process_favorite(user_id: int, process_id: int):
         QueryBuilder("processo_favoritos") \
             .eq("id_usuario", user_id) \
             .eq("id_processo", process_id) \
-            .delete() \
-            .execute()
+            .delete()
         return False # Não é mais favorito
     else:
         # Adiciona
