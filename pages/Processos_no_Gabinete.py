@@ -736,8 +736,8 @@ else:
         st.markdown('</div>', unsafe_allow_html=True)
 
         # Seções de favoritos e suspensos
-        ui_utils.display_favoritos_expander(None, id_chefe_para_acoes, 'Pages/Processos_no_Gabinete.py')
-        ui_utils.display_suspensos_expander(None, id_chefe_para_acoes, 'Pages/Processos_no_Gabinete.py')
+        ui_utils.display_favoritos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py')
+        ui_utils.display_suspensos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py')
         
         st.markdown("---")
         
@@ -1030,4 +1030,5 @@ else:
         st.error(f"Erro ao carregar dashboard: {e}")
         import traceback
         st.code(traceback.format_exc())
+
 
