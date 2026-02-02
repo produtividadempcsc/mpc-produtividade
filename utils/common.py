@@ -135,6 +135,64 @@ def has_unread_comments(processo_id: int, user_id: int) -> bool:
         return False
 
 
+def batch_has_unread_comments(processo_ids: list, user_id: int) -> dict:
+    """
+    Verifica quais processos têm comentários não lidos em batch (otimizado).
+    Usa apenas 2 queries HTTP em vez de 2*N queries.
+    
+    Args:
+        processo_ids: Lista de IDs de processos para verificar
+        user_id: ID do usuário que está verificando
+        
+    Returns:
+        Dict {processo_id: bool} indicando se cada processo tem comentários não lidos
+    """
+    if not processo_ids:
+        return {}
+    
+    try:
+        # Query única para todos os comentários dos processos
+        comments = QueryBuilder("comentarios") \
+            .in_list("id_processo", processo_ids) \
+            .select("id, id_processo") \
+            .execute()
+        
+        if not comments:
+            return {pid: False for pid in processo_ids}
+        
+        # Agrupar comentários por processo
+        comments_by_processo = {}
+        all_comment_ids = []
+        for c in comments:
+            pid = c['id_processo']
+            if pid not in comments_by_processo:
+                comments_by_processo[pid] = []
+            comments_by_processo[pid].append(c['id'])
+            all_comment_ids.append(c['id'])
+        
+        # Query única para todos os comentários lidos pelo usuário
+        read_marks = QueryBuilder("comentario_lido") \
+            .eq("id_usuario", user_id) \
+            .in_list("id_comentario", all_comment_ids) \
+            .select("id_comentario") \
+            .execute()
+        
+        read_ids = {r['id_comentario'] for r in read_marks}
+        
+        # Calcular quais processos têm não lidos
+        result = {}
+        for pid in processo_ids:
+            proc_comments = set(comments_by_processo.get(pid, []))
+            proc_read = proc_comments & read_ids
+            result[pid] = len(proc_comments) > len(proc_read)
+        
+        return result
+        
+    except Exception as e:
+        print(f"[COMMENTS] Error checking batch unread: {e}")
+        return {pid: False for pid in processo_ids}
+
+
 def adicionar_recesso_para_todos_usuarios(descricao: str, data_inicio: date, data_fim: date):
     """
     Adiciona um período de recesso coletivo para TODOS os usuários do sistema.
