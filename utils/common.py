@@ -3,31 +3,14 @@ import re
 import unicodedata
 from datetime import date, datetime
 from typing import List, Dict, Any, Callable
-import pytz
 from thefuzz import fuzz
 from supabase_client import QueryBuilder, insert, select_all
 from db_compat import (
     get_product_type_by_id, calculate_due_date, select_all
 )
 
-# --- FUNÇÕES DE FUSO HORÁRIO DO BRASIL ---
-# O sistema roda no Streamlit Cloud (UTC), mas os usuários estão no Brasil (GMT-3)
-
-BRAZIL_TZ = pytz.timezone('America/Sao_Paulo')
-
-def now_brazil() -> datetime:
-    """
-    Retorna o datetime atual no fuso horário do Brasil (America/Sao_Paulo).
-    Use esta função em vez de datetime.now() para garantir horário correto.
-    """
-    return datetime.now(BRAZIL_TZ)
-
-def today_brazil() -> date:
-    """
-    Retorna a data atual no fuso horário do Brasil (America/Sao_Paulo).
-    Use esta função em vez de date.today() para garantir data correta.
-    """
-    return datetime.now(BRAZIL_TZ).date()
+# Importar funções de timezone do módulo separado (sem dependências circulares)
+from utils.timezone import now_brazil, today_brazil, BRAZIL_TZ
 
 # --- FUNÇÕES DE TEXTO E NORMALIZAÇÃO ---
 
