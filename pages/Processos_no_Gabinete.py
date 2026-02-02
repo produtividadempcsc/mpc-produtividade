@@ -871,13 +871,8 @@ else:
             favs_rows = QueryBuilder("processo_favoritos").eq("id_usuario", st.session_state.user_id).select("id_processo").execute()
             favoritos_cache = {r['id_processo'] for r in favs_rows}
 
-            # Unread comments cache (batch check?)
-            # common_utils.has_unread_comments query per process. Can we optimize?
-            # It checks `comentarios` vs `comentario_lido`.
-            # For now, keep per-item check or accept n+1 penalty of Supabase calls (HTTP). 
-            # Optimization: Fetch all unread comments for user in one go?
-            # `select id_processo from comentarios where id_processo in PIDS AND ...`
-            # Leave as per-item function call for now, optimization later if needed.
+            # Batch check for unread comments (optimization: 2 queries instead of N*2)
+            unread_comments_cache = common_utils.batch_has_unread_comments(pids, st.session_state.user_id) if processos_filtrados else {}
 
             for p in processos_filtrados:
                 produto_obj = produtos_cache.get(p['id_tipo_produto'])
@@ -899,7 +894,7 @@ else:
                     "procurador_nome": usuarios_cache.get(p.get('id_procurador'), "N/A"),
                     "possui_anexo": p_id in anexos_cache,
                     "is_favorito": p_id in favoritos_cache,
-                    "tem_nao_lidos": common_utils.has_unread_comments(p_id, st.session_state.user_id)
+                    "tem_nao_lidos": unread_comments_cache.get(p_id, False)  # Uses batch cache
                 }
                 
                 # Prazo calc
