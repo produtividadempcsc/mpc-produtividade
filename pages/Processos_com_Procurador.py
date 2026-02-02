@@ -623,7 +623,11 @@ try:
 
                 with fav_col2:
                     if st.button("✅ Marcar como Finalizado", key=f"fav_finalizar_{p_id}", width='stretch', type="primary"):
-                        update_by_id("processos", p_id, {"status_chefe": "Finalizado", "status_servidor": "Finalizado"})
+                        update_by_id("processos", p_id, {
+                            "status_chefe": "Finalizado", 
+                            "status_servidor": "Finalizado",
+                            "data_finalizacao": datetime.now().isoformat()
+                        })
                         st.success(f"✅ Processo {p.get('processo_numero')} finalizado!")
                         st.rerun()
                 
@@ -639,8 +643,8 @@ try:
                     button_type = "primary" if tem_nao_lidos_fav else "secondary"
                     if st.button(button_label, key=f"fav_comments_{p_id}", width='stretch', type=button_type):
                         st.session_state['processo_id'] = p_id
-                        st.session_state['came_from'] = 'pages/Processos_com_Procurador.py'
-                        st.switch_page('pages/Comentarios_Processo.py')
+                        st.session_state['came_from'] = 'Pages/Processos_com_Procurador.py'
+                        st.switch_page('Pages/Comentarios_Processo.py')
                 
                 with fav_col5:
                     if st.button("📜 Ver Histórico", key=f"fav_hist_{p_id}", width='stretch'):
@@ -802,7 +806,11 @@ try:
 
                 with b_col2:
                     if st.button("✅ Marcar como Finalizado", key=f"procurador_concluiu_{p['id']}", width='stretch', type="primary"):
-                        update_by_id("processos", p['id'], {"status_chefe": "Finalizado", "status_servidor": "Finalizado"})
+                        update_by_id("processos", p['id'], {
+                            "status_chefe": "Finalizado",  
+                            "status_servidor": "Finalizado",
+                            "data_finalizacao": datetime.now().isoformat()
+                        })
                         # Unfavorite logic should handle itself or be ignored here based on UI
                         if p['id'] in favoritos_cache:
                             toggle_process_favorite(st.session_state.user_id, p['id']) # Remove
@@ -822,8 +830,8 @@ try:
                     button_type = "primary" if tem_nao_lidos else "secondary"
                     if st.button(button_label, key=f"comments_proc_{p['id']}", width='stretch', type=button_type):
                         st.session_state['processo_id'] = p['id']
-                        st.session_state['came_from'] = 'pages/Processos_com_Procurador.py'
-                        st.switch_page('pages/Comentarios_Processo.py')
+                        st.session_state['came_from'] = 'Pages/Processos_com_Procurador.py'
+                        st.switch_page('Pages/Comentarios_Processo.py')
                 
                 with b_col5:
                     if st.button("📜 Histórico", key=f"hist_proc_{p['id']}", width='stretch'):
