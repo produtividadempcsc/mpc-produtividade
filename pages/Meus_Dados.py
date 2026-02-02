@@ -43,21 +43,39 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# --- Carregar Dados ---
-with st.spinner("🔄 Carregando seus dados..."):
-    user_id = st.session_state.user_id
+# --- Carregar Dados com Cache ---
+user_id = st.session_state.user_id
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_user_data(uid):
+    """Carrega dados do usuário com cache e queries otimizadas."""
+    # Selecionar apenas colunas necessárias para processos (reduz ~70% do payload)
+    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,prazo_servidor_aplicado,prazo_total_dias_suspenso"
+    processos = QueryBuilder("processos") \
+        .eq("id_servidor_responsavel", uid) \
+        .select(processos_cols) \
+        .execute()
     
-    # Buscar processos do usuário
-    all_user_processes = QueryBuilder("processos").eq("id_servidor_responsavel", user_id).execute()
+    # Selecionar apenas colunas necessárias para usuários (id e nome)
+    usuarios = QueryBuilder("usuarios") \
+        .select("id,nome_completo") \
+        .execute()
+    
+    # Selecionar apenas colunas necessárias para tipos de produto
+    tipos = QueryBuilder("tipos_produto") \
+        .select("id,nome_produto,tipo_contagem_prazo") \
+        .execute()
+    
+    return processos, usuarios, tipos
+
+with st.spinner("🔄 Carregando seus dados..."):
+    all_user_processes, all_users, all_types = load_user_data(user_id)
     
     if not all_user_processes:
         st.info("📋 Você ainda não possui processos atribuídos.")
         st.stop()
     
-    # Carregar dados auxiliares
-    all_users = select_all("usuarios")
     usuarios_dict = {u['id']: u for u in all_users}
-    all_types = get_all_product_types()
     tipos_dict = {t['id']: t for t in all_types}
     
     # Preparar DataFrame
@@ -70,13 +88,14 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     hoje = today_brazil()
-    primeiro_dia_mes = date(hoje.year, hoje.month, 1)
-    ultimo_dia_mes = (primeiro_dia_mes.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    # Data padrão: 01/01/2024 até 31/12 do ano corrente
+    data_inicio_padrao = date(2024, 1, 1)
+    data_fim_padrao = date(hoje.year, 12, 31)
     
-    f_ini = st.date_input("📅 Data Início", value=primeiro_dia_mes, format="DD/MM/YYYY")
+    f_ini = st.date_input("📅 Data Início", value=data_inicio_padrao, format="DD/MM/YYYY")
 
 with col2:
-    f_fim = st.date_input("📅 Data Fim", value=ultimo_dia_mes, format="DD/MM/YYYY")
+    f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
 
 with col3:
     tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
@@ -162,15 +181,27 @@ st.markdown("---")
 if not df_filtered.empty:
     st.markdown("### 📉 Evolução Mês a Mês")
     
-    # Preparar dados mensais
-    df_filtered['mes'] = df_filtered['data_conclusao_servidor'].dt.to_period('M').astype(str)
+    # Mapeamento de meses para português
+    MESES_PT = {
+        1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+        7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+    }
+    
+    def formatar_mes(dt):
+        """Formata datetime para 'Jan/2025' etc."""
+        return f"{MESES_PT[dt.month]}/{dt.year}"
+    
+    # Preparar dados mensais com formato correto
+    df_filtered['mes_dt'] = df_filtered['data_conclusao_servidor'].dt.to_period('M').dt.to_timestamp()
+    df_filtered['mes'] = df_filtered['data_conclusao_servidor'].apply(formatar_mes)
     
     # Gráfico 1: Processos Concluídos por Mês
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
         st.markdown("#### 📋 Processos Concluídos")
-        concluidos_mes = df_filtered.groupby('mes').size().reset_index(name='Quantidade')
+        concluidos_mes = df_filtered.groupby(['mes_dt', 'mes']).size().reset_index(name='Quantidade')
+        concluidos_mes = concluidos_mes.sort_values('mes_dt')
         if not concluidos_mes.empty:
             fig1 = px.bar(concluidos_mes, x='mes', y='Quantidade', 
                           color='Quantidade', color_continuous_scale='viridis',
@@ -179,7 +210,8 @@ if not df_filtered.empty:
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 xaxis_title="Mês",
-                yaxis_title="Processos"
+                yaxis_title="Processos",
+                xaxis={'categoryorder': 'array', 'categoryarray': concluidos_mes['mes'].tolist()}
             )
             st.plotly_chart(fig1, use_container_width=True)
         else:
@@ -187,7 +219,8 @@ if not df_filtered.empty:
     
     with col_g2:
         st.markdown("#### ⏱️ Tempo Médio (dias)")
-        tempo_mes = df_filtered.groupby('mes')['duracao_servidor'].mean().reset_index(name='Tempo Médio')
+        tempo_mes = df_filtered.groupby(['mes_dt', 'mes'])['duracao_servidor'].mean().reset_index(name='Tempo Médio')
+        tempo_mes = tempo_mes.sort_values('mes_dt')
         if not tempo_mes.empty:
             fig2 = px.line(tempo_mes, x='mes', y='Tempo Médio', markers=True)
             fig2.update_traces(line_color='#9E0520', line_width=3)
@@ -195,7 +228,8 @@ if not df_filtered.empty:
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 xaxis_title="Mês",
-                yaxis_title="Dias"
+                yaxis_title="Dias",
+                xaxis={'categoryorder': 'array', 'categoryarray': tempo_mes['mes'].tolist()}
             )
             st.plotly_chart(fig2, use_container_width=True)
         else:
@@ -205,10 +239,11 @@ if not df_filtered.empty:
     
     with col_g3:
         st.markdown("#### ✅ % Entrega no Prazo")
-        prazo_mes = df_filtered.groupby('mes').agg(
+        prazo_mes = df_filtered.groupby(['mes_dt', 'mes']).agg(
             total=('id', 'count'),
             no_prazo=('no_prazo_servidor', 'sum')
         ).reset_index()
+        prazo_mes = prazo_mes.sort_values('mes_dt')
         prazo_mes['Percentual'] = (prazo_mes['no_prazo'] / prazo_mes['total'] * 100).fillna(0)
         
         if not prazo_mes.empty:
@@ -219,7 +254,8 @@ if not df_filtered.empty:
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
                 xaxis_title="Mês",
-                yaxis_title="%"
+                yaxis_title="%",
+                xaxis={'categoryorder': 'array', 'categoryarray': prazo_mes['mes'].tolist()}
             )
             st.plotly_chart(fig3, use_container_width=True)
         else:
@@ -230,19 +266,26 @@ if not df_filtered.empty:
         if historico_devolucoes:
             df_dev = pd.DataFrame(historico_devolucoes)
             df_dev['timestamp'] = pd.to_datetime(df_dev.get('timestamp', df_dev.get('created_at')), errors='coerce')
-            df_dev['mes'] = df_dev['timestamp'].dt.to_period('M').astype(str)
-            dev_mes = df_dev.groupby('mes').size().reset_index(name='Devoluções')
-            
-            fig4 = px.bar(dev_mes, x='mes', y='Devoluções',
-                          color='Devoluções', color_continuous_scale='Reds',
-                          text='Devoluções')
-            fig4.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
-                xaxis_title="Mês",
-                yaxis_title="Quantidade"
-            )
-            st.plotly_chart(fig4, use_container_width=True)
+            df_dev = df_dev.dropna(subset=['timestamp'])
+            if not df_dev.empty:
+                df_dev['mes_dt'] = df_dev['timestamp'].dt.to_period('M').dt.to_timestamp()
+                df_dev['mes'] = df_dev['timestamp'].apply(formatar_mes)
+                dev_mes = df_dev.groupby(['mes_dt', 'mes']).size().reset_index(name='Devoluções')
+                dev_mes = dev_mes.sort_values('mes_dt')
+                
+                fig4 = px.bar(dev_mes, x='mes', y='Devoluções',
+                              color='Devoluções', color_continuous_scale='Reds',
+                              text='Devoluções')
+                fig4.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    xaxis_title="Mês",
+                    yaxis_title="Quantidade",
+                    xaxis={'categoryorder': 'array', 'categoryarray': dev_mes['mes'].tolist()}
+                )
+                st.plotly_chart(fig4, use_container_width=True)
+            else:
+                st.info("Nenhuma devolução no período.")
         else:
             st.info("Nenhuma devolução no período.")
     
