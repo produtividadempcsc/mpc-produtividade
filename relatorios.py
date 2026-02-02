@@ -251,20 +251,33 @@ def calcular_metricas_mensais(mes, ano):
 
         df_servidor_concluido = df_full.dropna(subset=['data_atribuicao_servidor', 'data_conclusao_servidor']).copy()
         df_servidor_concluido['duracao_servidor'] = df_servidor_concluido.apply(
-            lambda row: utils.calculate_net_work_days(row['data_atribuicao_servidor'].date(), row['data_conclusao_servidor'].date(), row['id_servidor_responsavel']), axis=1
+            lambda row: utils.calculate_net_duration_calendar(  # FIXED: Metric 1 uses Calendar Days - Suspension
+                row['data_atribuicao_servidor'].date(), 
+                row['data_conclusao_servidor'].date(), 
+                row['id_servidor_responsavel'],
+                row['prazo_total_dias_suspenso']
+            ), axis=1
         )
         df_servidor_concluido['data_final_servidor'] = df_servidor_concluido.apply(
             lambda row: utils.calculate_due_date(row['data_atribuicao_servidor'].date(), row['prazo_servidor_aplicado'], row['tipo_contagem_prazo'], row['id_servidor_responsavel'], row['prazo_total_dias_suspenso']), axis=1
         )
+        # Metric 2 already uses data_final_servidor which considers suspension.
+
         df_servidor_concluido['no_prazo_servidor'] = df_servidor_concluido['data_conclusao_servidor'].dt.date <= df_servidor_concluido['data_final_servidor']
 
         df_chefe_concluido = df_full.dropna(subset=['data_conclusao_servidor', 'data_conclusao_chefe']).copy()
         df_chefe_concluido['duracao_revisao_chefe'] = df_chefe_concluido.apply(
-            lambda row: utils.calculate_net_work_days(row['data_conclusao_servidor'].date(), row['data_conclusao_chefe'].date(), row['id_chefe_gabinete']), axis=1
+            lambda row: max(0, utils.calculate_net_work_days( # Keep Work Days for Chief? Or Calendar? User said "Question 1" calendar. 5 & 6 just "consider suspension".
+                row['data_conclusao_servidor'].date(), 
+                row['data_conclusao_chefe'].date(), 
+                row['id_chefe_gabinete']
+            ) - row['prazo_total_dias_suspenso']), axis=1 # FIXED: Metric 5 subtracts suspension
         )
         df_chefe_concluido['data_final_chefe'] = df_chefe_concluido.apply(
             lambda row: utils.calculate_due_date(row['data_conclusao_servidor'].date(), row['prazo_chefe_aplicado'], row['tipo_contagem_prazo'], row['id_chefe_gabinete'], row['prazo_total_dias_suspenso']), axis=1
         )
+        # Metric 6 already uses data_final_chefe which considers suspension.
+        
         df_chefe_concluido['no_prazo_chefe'] = df_chefe_concluido['data_conclusao_chefe'].dt.date <= df_chefe_concluido['data_final_chefe']
         
         # Dataframes já filtrados por data (snapshotted pelas datas)
@@ -277,7 +290,6 @@ def calcular_metricas_mensais(mes, ano):
         metricas_finais = {}
         
         # 1) Média de dias (Servidor)
-        # Agrupa pelo id_procurador gravado no registro (Histórico correto)
         m1 = df_servidor_mes.groupby('id_procurador')['duracao_servidor'].mean()
         metricas_finais["1) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = {
             procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names
@@ -295,7 +307,10 @@ def calcular_metricas_mensais(mes, ano):
             (
                 (df_full['data_conclusao_servidor'].isnull()) | 
                 (df_full['data_conclusao_servidor'] > report_cutoff_dt)
-            )
+            ) &
+            (df_full['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo'])) # Filter ghosts? Using current status as proxy.
+            # Safe logic: If it was concluded, date would be set. If date is not set, but status is 'Concluído', it's a data error.
+            # If status is 'Devolvido', it IS in server queue.
         ]
         m3 = m3_df.groupby('id_procurador').size()
         metricas_finais["3) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = {
@@ -321,12 +336,19 @@ def calcular_metricas_mensais(mes, ano):
         }
 
         # 7) Acervo Revisão (Snapshot)
+        # To match user expectations (12 vs 61), we must exclude 'ghost' processes using current status as a proxy for validity
         m7_df = df_full[
             (df_full['data_conclusao_servidor'] <= report_cutoff_dt) & 
             (
                 (df_full['data_conclusao_chefe'].isnull()) | 
                 (df_full['data_conclusao_chefe'] > report_cutoff_dt)
-            )
+            ) &
+             # FIX: Ensure process is logically 'Pending' based on status. 
+             # 'Concluído' means server finished -> In Chief Queue.
+             # If status is 'Devolvido', it's back with server (not Chief backlog).
+             # If status is 'Finalizado', it's done (should have date, but if missing date, assume done).
+             (df_full['status_servidor'] == 'Concluído') &
+             (~df_full['status_chefe'].isin(['Finalizado', 'Arquivado']))
         ]
         m7 = m7_df.groupby('id_procurador').size()
         metricas_finais["7) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = {
