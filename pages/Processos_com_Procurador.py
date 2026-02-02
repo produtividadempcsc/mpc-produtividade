@@ -826,15 +826,15 @@ try:
                         st.switch_page('Pages/Comentarios_Processo.py')
                 
                 with b_col5:
-                    if st.button("📜 Histórico", key=f"hist_proc_{p.id}", width='stretch'):
-                        st.session_state.history_visible_procurador[p.id] = not st.session_state.history_visible_procurador.get(p.id, False)
+                    if st.button("📜 Histórico", key=f"hist_proc_{p['id']}", width='stretch'):
+                        st.session_state.history_visible_procurador[p['id']] = not st.session_state.history_visible_procurador.get(p['id'], False)
                         st.rerun()
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                if st.session_state.history_visible_procurador.get(p.id, False):
+                if st.session_state.history_visible_procurador.get(p['id'], False):
                     st.markdown("---")
-                    ui_utils.display_process_history(p, db)
+                    ui_utils.display_process_history(p, None)
 
                 st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -849,11 +849,11 @@ try:
         """, unsafe_allow_html=True)
 
         df_relatorio_procurador = pd.DataFrame([{
-            'Nº Processo': p.processo_numero,
-            'Servidor': usuarios_cache.get(p.id_servidor_responsavel, "N/A"),
-            'Produto': produtos_cache.get(p.id_tipo_produto).nome_produto if p.id_tipo_produto in produtos_cache else 'N/A',
-            'Status': p.status_chefe,
-            'Data de Envio': p.data_conclusao_chefe.strftime('%d/%m/%Y') if p.data_conclusao_chefe else "N/A"
+            'Nº Processo': p.get('processo_numero'),
+            'Servidor': usuarios_cache.get(p.get('id_servidor_responsavel'), "N/A"),
+            'Produto': produtos_cache.get(p.get('id_tipo_produto'), {}).get('nome_produto', 'N/A'),
+            'Status': p.get('status_chefe'),
+            'Data de Envio': date.fromisoformat(p.get('data_conclusao_chefe')).strftime('%d/%m/%Y') if p.get('data_conclusao_chefe') else "N/A"
         } for p in processos_com_procurador])
 
         st.download_button(
@@ -867,5 +867,3 @@ try:
 
 except Exception as e:
     st.error(f"Ocorreu um erro ao carregar a página: {e}")
-finally:
-    db.close()
