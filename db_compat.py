@@ -11,7 +11,8 @@ from repositories.afastamento_repository import (
 )
 from services.prazo_service import (
     calculate_due_date, calculate_due_date_with_details,
-    calculate_calendar_days_minus_leave, calculate_net_work_days, count_business_days
+    calculate_calendar_days_minus_leave, calculate_net_work_days, count_business_days,
+    calculate_net_duration_calendar
 )
 
 
