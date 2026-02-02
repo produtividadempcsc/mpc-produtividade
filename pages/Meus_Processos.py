@@ -873,42 +873,19 @@ else:
                 # Botões de ação
                 st.markdown('<div class="action-buttons">', unsafe_allow_html=True)
                 
-                action_cols = st.columns([1, 2, 2, 2, 2])
+                action_cols = st.columns([1, 3, 3, 3])
                 
                 with action_cols[0]:
-                    # Ícones de ação
-                    icon_col1, icon_col2, icon_col3 = st.columns(3)
-                    with icon_col1:
-                        is_favorito = is_process_favorite(user_id, p_id)
-                        star_icon = "⭐" if is_favorito else "☆"
-                        if st.button(star_icon, key=f"fav_serv_exp_{p_id}", help="Marcar como favorito"):
-                            toggle_process_favorite(user_id, p_id)
-                            if is_favorito:
-                                st.toast(f"Processo {p_processo_numero} removido dos favoritos.")
-                            else:
-                                st.toast(f"Processo {p_processo_numero} adicionado aos favoritos.")
-                            st.rerun()
-                    with icon_col2:
-                        if produto_obj and produto_obj.get('descricao'):
-                            with st.popover("📖", help="Ver descrição do tipo de produto"):
-                                st.markdown(produto_obj.get('descricao'))
+                    # Ícone de favorito
+                    is_favorito = is_process_favorite(user_id, p_id)
+                    star_icon = "⭐" if is_favorito else "☆"
+                    if st.button(star_icon, key=f"fav_serv_exp_{p_id}", help="Marcar como favorito"):
+                        toggle_process_favorite(user_id, p_id)
+                        if is_favorito:
+                            st.toast(f"Processo {p_processo_numero} removido dos favoritos.")
                         else:
-                            st.button("📖", key=f"wiki_serv_exp_{p_id}", help="Nenhuma descrição disponível", disabled=True)
-                    with icon_col3:
-                        template_path = produto_obj.get('template_path') if produto_obj else None
-                        template_exists = template_path and os.path.exists(template_path)
-                        if template_exists:
-                            with open(template_path, "rb") as f:
-                                st.download_button(
-                                    label="📄",
-                                    data=f.read(),
-                                    file_name=os.path.basename(template_path),
-                                    mime="application/octet-stream",
-                                    key=f"template_serv_exp_{p_id}",
-                                    help="Baixar modelo"
-                                )
-                        else:
-                            st.button("📄", key=f"template_serv_exp_{p_id}", help="Nenhum modelo disponível", disabled=True)
+                            st.toast(f"Processo {p_processo_numero} adicionado aos favoritos.")
+                        st.rerun()
 
                 with action_cols[1]:
                     if p_status_servidor not in ["Concluído", "Finalizado"]:
@@ -925,9 +902,6 @@ else:
                         st.switch_page('Pages/Comentarios_Processo.py')
                 
                 with action_cols[3]:
-                    st.empty() # Botão 'Ver Processo' removido
-                
-                with action_cols[4]:
                     history_visible = st.session_state.history_visible.get(p_id, False)
                     button_label = "📈 Ocultar" if history_visible else "📈 Histórico"
                     if st.button(button_label, key=f"hist_serv_{p_id}", width='stretch'):
