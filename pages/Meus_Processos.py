@@ -838,7 +838,7 @@ else:
 
                 # Informações de prazo
                 if not p_nao_se_aplica_prazo and data_atrib:
-                    data_final_ajustada, ajuste = utils.calculate_due_date_with_details(
+                    data_final_ajustada, ajuste = calculate_due_date_with_details(
                         start_date=data_atrib,
                         prazo_dias=processo.get('prazo_servidor_aplicado'),
                         tipo_contagem=produto_obj.get('tipo_contagem_prazo') if produto_obj else 'dias uteis',
@@ -933,7 +933,7 @@ else:
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 if st.session_state.history_visible.get(p_id, False):
-                    utils.display_process_history(processo, None)
+                    ui_utils.display_process_history(processo, None)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
