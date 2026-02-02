@@ -9,6 +9,9 @@ from repositories.afastamento_repository import (
     get_leaves_count, get_active_leaves_count, get_leaves_filtered,
     create_leave, delete_leave, get_all_leaves_count
 )
+
+# Re-export for external usage
+get_leave_days_for_period = get_leave_days_for_period
 from services.prazo_service import (
     calculate_due_date, calculate_due_date_with_details,
     calculate_calendar_days_minus_leave, calculate_net_work_days, count_business_days,
