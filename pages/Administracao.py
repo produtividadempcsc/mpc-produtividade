@@ -12,10 +12,26 @@ import utils
 from utils.common import generate_nome_id
 import relatorios
 import reports_corregedoria
-import ui_utils
-import backup
+from utils.jobs import initialize_restored_data # Importação para pós-processamento de restore
 
-# Usar API Supabase em vez de SQLAlchemy
+# ... existing code ...
+
+            if st.button("🚨 INICIAR RESTAURAÇÃO", type="primary", width='stretch'):
+                with st.spinner("⏳ Restaurando banco de dados... Isso pode levar alguns minutos."):
+                    sucesso, mensagem = backup.restore_database(uploaded_backup)
+                
+                if sucesso:
+                    st.success(f"✅ {mensagem}")
+                    
+                    # Pós-processamento para garantir integridade
+                    with st.spinner("🔄 Recalculando prazos e status dos processos restaurados..."):
+                        try:
+                            initialize_restored_data()
+                            st.success("✅ Prazos e status recalculados com sucesso!")
+                        except Exception as e:
+                            st.error(f"⚠️ Dados restaurados, mas houve erro no recálculo de status: {e}")
+                            
+                    st.balloons()
 from db_compat import (
     get_all_product_types, get_product_type_by_id, get_product_type_by_name,
     create_product_type, update_product_type, delete_product_type, get_latest_product_versions,
