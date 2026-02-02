@@ -898,8 +898,8 @@ else:
                     button_type = "primary" if tem_nao_lidos else "secondary"
                     if st.button(button_label, key=f"comments_proc_{p_id}", width='stretch', type=button_type):
                         st.session_state['processo_id'] = p_id
-                        st.session_state['came_from'] = 'Pages/Meus_Processos.py'
-                        st.switch_page('Pages/Comentarios_Processo.py')
+                        st.session_state['came_from'] = 'pages/meus_processos.py'
+                        st.switch_page('pages/Comentarios_Processo.py')
                 
                 with action_cols[3]:
                     history_visible = st.session_state.history_visible.get(p_id, False)
