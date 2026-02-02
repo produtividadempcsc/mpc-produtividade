@@ -370,6 +370,31 @@ with admin_tabs[3]:
             st.success(f"✅ Frequência de backup atualizada para: {new_freq}")
             st.rerun()
 
+    # Seção de Backup Manual (Adicionada)
+    with st.container(border=True):
+        st.markdown("**⬇️ Backup Manual e Download**")
+        st.info("ℹ️ Gere um backup completo do sistema agora e faça o download imediato.")
+        
+        if st.button("📦 Gerar Backup Agora", type="primary", width='stretch'):
+            with st.spinner("⏳ Gerando backup completo..."):
+                backup_path = backup.backup_local_excel()
+                
+            if backup_path and os.path.exists(backup_path):
+                st.success("✅ Backup gerado com sucesso!")
+                
+                with open(backup_path, "rb") as f:
+                    st.download_button(
+                        label="⬇️ Baixar Arquivo de Backup (.xlsx)",
+                        data=f.read(),
+                        file_name=os.path.basename(backup_path),
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_manual_backup_btn",
+                        type="secondary",
+                        width='stretch'
+                    )
+            else:
+                st.error("❌ Falha ao gerar o arquivo de backup.")
+
     # Seção de Restauração (Adicionada)
     with st.container(border=True):
         st.markdown("**♻️ Restaurar Backup**")
