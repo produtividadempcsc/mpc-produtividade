@@ -391,18 +391,17 @@ st.markdown("""
 # Verificar se processo está selecionado
 if 'processo_id' not in st.session_state:
     st.error("⚠️ Nenhum processo selecionado. Redirecionando...")
-    st.switch_page("Pages/Processos_MPC.py") # Capitalized Pages? Wait, path case sensitivity. Original was pages/Processos_MPC.py.
-    # But files are in Pages/. Streamlit might be forgiving or case sensitive. Better match file system `Pages`.
-    # Original code used "pages/Processos_MPC.py". I will use "Pages/Processos_MPC.py" to be safe and consistent with other files.
+    st.switch_page("pages/meus_processos.py")
     st.stop()
 
 processo_id = st.session_state['processo_id']
-# processo = db.get(Processo, processo_id)
-processo = QueryBuilder("processos").eq("id", processo_id).single().execute()
+# Buscar processo pelo ID
+processo_list = QueryBuilder("processos").eq("id", processo_id).select("*").execute()
+processo = processo_list[0] if processo_list else None
 
 if not processo:
     st.error("❌ Processo não encontrado.")
-    st.switch_page("Pages/Processos_MPC.py")
+    st.switch_page("pages/meus_processos.py")
     st.stop()
 
 # Header principal do sistema
@@ -423,7 +422,7 @@ with col2:
         if 'came_from' in st.session_state:
             st.switch_page(st.session_state['came_from'])
         else:
-            st.switch_page("Pages/Processos_MPC.py")
+            st.switch_page("pages/meus_processos.py")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Buscar todos os comentários
