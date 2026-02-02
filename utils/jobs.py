@@ -7,7 +7,7 @@ from db_compat import (
     calculate_due_date, is_business_day
 )
 from utils.notifications import send_email_notification
-from utils.common import today_brazil, now_brazil
+from utils.timezone import today_brazil, now_brazil
 
 def update_process_statuses():
     """
