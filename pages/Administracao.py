@@ -347,7 +347,8 @@ with admin_tabs[2]:
 with admin_tabs[3]:
     st.subheader("💾 Gerenciamento de Backup")
 
-    st.warning("⚠️ O sistema de backup está temporariamente desativado enquanto finalizamos a migração para o Supabase. Os dados estão seguros no banco de dados Supabase na nuvem.")
+    # st.warning("⚠️ O sistema de backup está temporariamente desativado...") # REMOVIDO
+    st.info("✅ O sistema de backup automático está ativo e integrado ao banco de dados em nuvem.")
     
     # Seção para Configuração do Backup Automático
     with st.container(border=True):
@@ -375,25 +376,36 @@ with admin_tabs[3]:
         st.markdown("**⬇️ Backup Manual e Download**")
         st.info("ℹ️ Gere um backup completo do sistema agora e faça o download imediato.")
         
-        if st.button("📦 Gerar Backup Agora", type="primary", width='stretch'):
+        if st.button("📦 Gerar Novo Backup", type="primary", width='stretch', key="btn_gerar_backup_manual"):
             with st.spinner("⏳ Gerando backup completo..."):
-                backup_path = backup.backup_local_excel()
-                
-            if backup_path and os.path.exists(backup_path):
-                st.success("✅ Backup gerado com sucesso!")
-                
-                with open(backup_path, "rb") as f:
-                    st.download_button(
-                        label="⬇️ Baixar Arquivo de Backup (.xlsx)",
-                        data=f.read(),
-                        file_name=os.path.basename(backup_path),
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_manual_backup_btn",
-                        type="secondary",
-                        width='stretch'
-                    )
-            else:
-                st.error("❌ Falha ao gerar o arquivo de backup.")
+                try:
+                    generated_path = backup.backup_local_excel()
+                    if generated_path and os.path.exists(generated_path):
+                        st.session_state['backup_manual_path'] = generated_path
+                        st.session_state['backup_manual_timestamp'] = datetime.now()
+                        st.rerun()
+                    else:
+                        st.error("❌ Falha ao gerar o arquivo de backup.")
+                except Exception as e:
+                     st.error(f"❌ Erro ao executar backup: {e}")
+
+        # Exibir botão de download se houver um backup válido no estado
+        if 'backup_manual_path' in st.session_state and os.path.exists(st.session_state['backup_manual_path']):
+            bkp_path = st.session_state['backup_manual_path']
+            bkp_time = st.session_state.get('backup_manual_timestamp', datetime.now())
+            
+            st.success(f"✅ Backup gerado em {bkp_time.strftime('%H:%M:%S')}")
+            
+            with open(bkp_path, "rb") as f:
+                st.download_button(
+                    label="⬇️ Baixar Arquivo de Backup (.xlsx)",
+                    data=f.read(),
+                    file_name=os.path.basename(bkp_path),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="download_manual_backup_btn_persistent",
+                    type="secondary",
+                    width='stretch'
+                )
 
     # Seção de Restauração (Adicionada)
     with st.container(border=True):
