@@ -589,6 +589,10 @@ try:
                 prods_data = QueryBuilder("tipos_produto").in_list("id", list(fav_prod_ids)).execute()
                 fav_prods_cache = {tp['id']: tp for tp in prods_data}
 
+            # Batch check for unread comments in favorites
+            fav_processo_ids = [p['id'] for p in favoritos_procurador]
+            fav_unread_cache = common_utils.batch_has_unread_comments(fav_processo_ids, st.session_state.user_id)
+
             for p in favoritos_procurador:
                 p_id = p['id']
                 servidor_nome = fav_users_cache.get(p.get('id_servidor_responsavel'), "N/A")
@@ -630,7 +634,7 @@ try:
                          st.rerun()
                 
                 with fav_col4:
-                    tem_nao_lidos_fav = common_utils.has_unread_comments(p_id, st.session_state.user_id)
+                    tem_nao_lidos_fav = fav_unread_cache.get(p_id, False)  # Uses batch cache
                     button_label = "💬 Comentário Não Lido" if tem_nao_lidos_fav else "💬 Comentários"
                     button_type = "primary" if tem_nao_lidos_fav else "secondary"
                     if st.button(button_label, key=f"fav_comments_{p_id}", width='stretch', type=button_type):
@@ -711,12 +715,15 @@ try:
         all_users = select_all("usuarios", "id, nome_completo")
         usuarios_cache = {u['id']: u['nome_completo'] for u in all_users}
 
+        # Batch check for unread comments (optimization: 2 queries instead of N*2)
+        unread_comments_cache = common_utils.batch_has_unread_comments(processo_ids_pagina, st.session_state.user_id)
+
         for p in processos_com_procurador:
             card_class = get_process_card_class(p)
             status_geral = "Processo com o Procurador"
             status_icon = ui_utils.get_status_emoji(status_geral)
             priority_icon = get_priority_icon(p.get('prioridade'))
-            tem_nao_lidos = common_utils.has_unread_comments(p['id'], st.session_state.user_id)
+            tem_nao_lidos = unread_comments_cache.get(p['id'], False)  # Uses batch cache
             unread_icon = "💬" if tem_nao_lidos else ""
             tem_anexo = p['id'] in anexos_cache
             anexo_icon = "📎" if tem_anexo else ""
