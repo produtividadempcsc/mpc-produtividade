@@ -233,12 +233,17 @@ def calcular_metricas_mensais(mes, ano):
                 'prazo_servidor_aplicado': p.get('prazo_servidor_aplicado'),
                 'prazo_chefe_aplicado': p.get('prazo_chefe_aplicado'),
                 'prazo_total_dias_suspenso': p.get('prazo_total_dias_suspenso', 0),
+                'status_servidor': p.get('status_servidor'),
+                'status_chefe': p.get('status_chefe'),
                 'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis')
             })
         
         df_full = pd.DataFrame(data)
         if df_full.empty:
             return {}
+
+        # Data de corte para o relatório (último dia do mês)
+        report_cutoff_dt = pd.to_datetime(end_date)
 
         for col in ['data_atribuicao_servidor', 'data_conclusao_servidor', 'data_conclusao_chefe']:
             df_full[col] = pd.to_datetime(df_full[col], errors='coerce')
@@ -267,13 +272,24 @@ def calcular_metricas_mensais(mes, ano):
         m_servidor = {
             'avg_dias': df_servidor_mes.groupby('id_servidor_responsavel')['duracao_servidor'].mean(),
             'pct_prazo': df_servidor_mes.groupby('id_servidor_responsavel')['no_prazo_servidor'].apply(_calculate_percentage),
-            'acervo': df_full[df_full['data_conclusao_servidor'].isnull() & (df_full['data_atribuicao_servidor'] <= pd.to_datetime(end_date))].groupby('id_servidor_responsavel').size()
+            # Acervo: processos não concluídos até o fim do mês, excluindo status finalizados (evita acervo fantasma)
+            'acervo': df_full[
+                df_full['data_conclusao_servidor'].isnull() & 
+                (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) & 
+                (~df_full['status_servidor'].isin(['Concluído', 'Finalizado', 'Processo com o Procurador']))
+            ].groupby('id_servidor_responsavel').size()
         }
         m_chefe = {
             'avg_dias_revisao': df_chefe_mes.groupby('id_chefe_gabinete')['duracao_revisao_chefe'].mean(),
             'pct_prazo_revisao': df_chefe_mes.groupby('id_chefe_gabinete')['no_prazo_chefe'].apply(_calculate_percentage),
             'num_revisados': df_chefe_mes.groupby('id_chefe_gabinete').size(),
-            'acervo_revisao': df_full[df_full['data_conclusao_servidor'].notnull() & df_full['data_conclusao_chefe'].isnull() & (df_full['data_conclusao_servidor'] <= pd.to_datetime(end_date))].groupby('id_chefe_gabinete').size()
+            # Acervo revisão: processos concluídos pelo servidor mas não revisados até o fim do mês, excluindo status finalizados (evita acervo fantasma)
+            'acervo_revisao': df_full[
+                df_full['data_conclusao_servidor'].notnull() & 
+                df_full['data_conclusao_chefe'].isnull() & 
+                (df_full['data_conclusao_servidor'] <= report_cutoff_dt) & 
+                (~df_full['status_chefe'].isin(['Finalizado', 'Processo com o Procurador']))
+            ].groupby('id_chefe_gabinete').size()
         }
 
         metricas_finais = {}
