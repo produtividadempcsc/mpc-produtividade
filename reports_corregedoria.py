@@ -5,6 +5,13 @@ from supabase_client import QueryBuilder, select_all
 import db_compat
 import sys
 
+# Debug flag - set to True to see processing details
+DEBUG_MODE = True
+
+def _debug_log(msg):
+    if DEBUG_MODE:
+        print(f"[CORREGEDORIA DEBUG] {msg}")
+
 def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
     """
     Coleta e processa os dados para o relatório da corregedoria.
@@ -42,16 +49,21 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             chefes_servidores_map[cid].append(sid)
             
     servidores_users = []
-    if server_ids := list(set(servidor_ids)):
-         servidores_users = QueryBuilder("usuarios").in_list("id", server_ids).execute()
+    servidor_ids_unique = list(set(servidor_ids))  # FIX: was 'server_ids' (typo)
+    if servidor_ids_unique:
+        servidores_users = QueryBuilder("usuarios").in_list("id", servidor_ids_unique).execute()
     
     servidores_map = {u['id']: u for u in servidores_users}
+    
+    _debug_log(f"Procurador: {procurador.get('nome_completo')}")
+    _debug_log(f"Chefes vinculados: {len(chefes_users)}")
+    _debug_log(f"Servidores vinculados: {len(servidores_users)}")
     
     gabinete_ids = [procurador_id] + chefe_ids + list(set(servidor_ids))
     
     # 2. Buscar Processos do Procurador
-    # Filter by id_procurador directly is efficient
     raw_processes = QueryBuilder("processos").eq("id_procurador", procurador_id).execute()
+    _debug_log(f"Total de processos do procurador: {len(raw_processes)}")
     
     # Pre-fetch product types for efficiency
     product_types = db_compat.get_all_product_types()
@@ -63,32 +75,60 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
     start_dt = str(start_date)
     end_dt = str(end_date)
     
+    # Contadores para debug
+    count_fora_periodo = 0
+    count_campos_faltando = 0
+    count_sem_tipo = 0
+    
     for p in raw_processes:
-        # Verificar se processa tramitou no período, lógica:
-        # data_atribuicao_servidor OU data_conclusao_servidor OU data_conclusao_chefe 
-        # deve estar entre start e end.
+        # LÓGICA MELHORADA: Verificar se processo teve ATIVIDADE no período
+        # Inclui processos que:
+        # 1. Foram atribuídos no período, OU
+        # 2. Foram concluídos pelo servidor no período, OU
+        # 3. Foram revisados pelo chefe no período, OU
+        # 4. Estavam ATIVOS durante o período (atribuído antes, ainda não concluído ou concluído depois)
         
-        dates_to_check = []
-        if p.get('data_atribuicao_servidor'): dates_to_check.append(p.get('data_atribuicao_servidor'))
-        if p.get('data_conclusao_servidor'): dates_to_check.append(p.get('data_conclusao_servidor'))
-        if p.get('data_conclusao_chefe'): dates_to_check.append(p.get('data_conclusao_chefe'))
+        d_atrib = p.get('data_atribuicao_servidor')
+        d_concl_serv = p.get('data_conclusao_servidor')
+        d_concl_chefe = p.get('data_conclusao_chefe')
         
         in_period = False
-        for d_str in dates_to_check:
-            # d_str format YYYY-MM-DD
-            if start_dt <= d_str <= end_dt:
+        
+        # Caso 1-3: Alguma data está dentro do período
+        for d_str in [d_atrib, d_concl_serv, d_concl_chefe]:
+            if d_str and start_dt <= d_str <= end_dt:
                 in_period = True
                 break
         
+        # Caso 4: Processo estava "em andamento" durante o período
+        # (atribuído ANTES ou no início do período E (não concluído OU concluído DEPOIS do período))
+        if not in_period and d_atrib:
+            atribuido_antes_ou_no_inicio = d_atrib <= end_dt
+            ainda_ativo = d_concl_serv is None or d_concl_serv >= start_dt
+            if atribuido_antes_ou_no_inicio and ainda_ativo:
+                in_period = True
+        
         if not in_period:
+            count_fora_periodo += 1
             continue
             
-        # Ensure essential fields exist
-        if not all([p.get('id_servidor_responsavel'), p.get('id_chefe_gabinete'), p.get('id_tipo_produto'), p.get('data_atribuicao_servidor')]):
+        # Verificar campos essenciais com logging
+        campos_faltando = []
+        if not p.get('id_servidor_responsavel'): campos_faltando.append('id_servidor_responsavel')
+        if not p.get('id_chefe_gabinete'): campos_faltando.append('id_chefe_gabinete')
+        if not p.get('id_tipo_produto'): campos_faltando.append('id_tipo_produto')
+        if not p.get('data_atribuicao_servidor'): campos_faltando.append('data_atribuicao_servidor')
+        
+        if campos_faltando:
+            count_campos_faltando += 1
+            _debug_log(f"Processo {p.get('processo_numero')}: campos faltando: {campos_faltando}")
             continue
             
         tipo_prod = prod_map.get(p['id_tipo_produto'])
-        if not tipo_prod: continue
+        if not tipo_prod:
+            count_sem_tipo += 1
+            _debug_log(f"Processo {p.get('processo_numero')}: tipo_produto ID {p['id_tipo_produto']} não encontrado")
+            continue
         
         servidor = servidores_map.get(p['id_servidor_responsavel']) or db_compat.get_user_by_id(p['id_servidor_responsavel']) # Fallback if not in current hierarchy but in history
         chefe = chefes_map.get(p['id_chefe_gabinete']) or db_compat.get_user_by_id(p['id_chefe_gabinete'])
@@ -164,11 +204,19 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             'Prazo MPC - servidor': p.get('prazo_servidor_aplicado'),
             'Prazo MPC - chefe de gabinete': p.get('prazo_chefe_aplicado')
         })
+    
+    # Log de diagnóstico
+    _debug_log(f"--- Resumo do Filtro ---")
+    _debug_log(f"Processos fora do período: {count_fora_periodo}")
+    _debug_log(f"Processos com campos faltando: {count_campos_faltando}")
+    _debug_log(f"Processos sem tipo de produto: {count_sem_tipo}")
+    _debug_log(f"Processos incluídos no relatório: {len(dados_processos)}")
         
     # Build DataFrames
     df_universo = pd.DataFrame(dados_processos)
     
     if df_universo.empty:
+        _debug_log("AVISO: DataFrame vazio! Nenhum processo passou pelos filtros.")
         return None
         
     # --- Process DataFrames for Sheets ---
