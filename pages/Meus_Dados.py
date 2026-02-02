@@ -32,16 +32,142 @@ st.set_page_config(
 # Carregar CSS do sistema
 ui_utils.load_css()
 
+# CSS customizado para a página Meus Dados
+st.markdown('''
+<style>
+    /* Loading Screen Animation */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.98); }
+    }
+    
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+    
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 20px;
+        margin: 20px 0;
+    }
+    
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #9E0520;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+        font-size: 1.2em;
+        color: #555;
+        font-weight: 500;
+    }
+    
+    /* KPI Cards Premium */
+    [data-testid="stMetric"] {
+        background: linear-gradient(145deg, #ffffff, #f8f9fa);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border-left: 4px solid #9E0520;
+        transition: all 0.3s ease;
+    }
+    
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(158, 5, 32, 0.15);
+    }
+    
+    [data-testid="stMetric"] [data-testid="stMetricLabel"] {
+        font-weight: 600;
+        color: #555;
+        font-size: 0.95em;
+    }
+    
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        font-weight: 700;
+        color: #1a1a1a;
+        font-size: 1.8em;
+    }
+    
+    /* Section Headers */
+    .section-title {
+        background: linear-gradient(90deg, #9E0520, transparent);
+        padding: 12px 20px;
+        border-radius: 10px;
+        color: white;
+        font-weight: 600;
+        font-size: 1.2em;
+        margin: 25px 0 15px 0;
+    }
+    
+    /* Chart Containers */
+    [data-testid="stPlotlyChart"] {
+        background: white;
+        border-radius: 15px;
+        padding: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+    }
+    
+    [data-testid="stPlotlyChart"]:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    /* Filter Section */
+    .filter-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #e9ecef;
+    }
+    
+    /* Date Inputs */
+    [data-testid="stDateInput"] {
+        background: white;
+        border-radius: 10px;
+    }
+    
+    /* Dividers */
+    hr {
+        border: none;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #9E0520, transparent);
+        margin: 30px 0;
+    }
+</style>
+''', unsafe_allow_html=True)
+
 st.session_state.active_page = "Meus Dados"
 build_sidebar()
 
 # --- Header Principal ---
 st.markdown('''
-<div style="background: linear-gradient(135deg, #9E0520 0%, #B8062A 100%); color: white; padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(158, 5, 32, 0.3);">
-    <h1 style="margin: 0; font-size: 2.2em; font-weight: 700;">📊 Meus Dados</h1>
-    <p style="margin: 10px 0 0 0; font-size: 1.1em; opacity: 0.9;">Painel de indicadores pessoais de produtividade</p>
+<div style="background: linear-gradient(135deg, #9E0520 0%, #B8062A 100%); color: white; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 8px 30px rgba(158, 5, 32, 0.35);">
+    <h1 style="margin: 0; font-size: 2.4em; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">📊 Meus Dados</h1>
+    <p style="margin: 12px 0 0 0; font-size: 1.15em; opacity: 0.95; font-weight: 400;">Painel de indicadores pessoais de produtividade</p>
 </div>
 ''', unsafe_allow_html=True)
+
+# --- Placeholder para Loading ---
+loading_placeholder = st.empty()
 
 # --- Carregar Dados com Cache ---
 user_id = st.session_state.user_id
@@ -68,18 +194,29 @@ def load_user_data(uid):
     
     return processos, usuarios, tipos
 
-with st.spinner("🔄 Carregando seus dados..."):
-    all_user_processes, all_users, all_types = load_user_data(user_id)
-    
-    if not all_user_processes:
-        st.info("📋 Você ainda não possui processos atribuídos.")
-        st.stop()
-    
-    usuarios_dict = {u['id']: u for u in all_users}
-    tipos_dict = {t['id']: t for t in all_types}
-    
-    # Preparar DataFrame
-    df_master = prepare_master_dataframe(all_user_processes, usuarios_dict, tipos_dict)
+# Mostrar loading enquanto carrega
+loading_placeholder.markdown('''
+<div class="loading-container">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">🔄 Carregando seus dados de produtividade...</div>
+    <p style="color: #888; margin-top: 10px; font-size: 0.9em;">Isso pode levar alguns segundos</p>
+</div>
+''', unsafe_allow_html=True)
+
+all_user_processes, all_users, all_types = load_user_data(user_id)
+
+# Limpar loading
+loading_placeholder.empty()
+
+if not all_user_processes:
+    st.info("📋 Você ainda não possui processos atribuídos.")
+    st.stop()
+
+usuarios_dict = {u['id']: u for u in all_users}
+tipos_dict = {t['id']: t for t in all_types}
+
+# Preparar DataFrame
+df_master = prepare_master_dataframe(all_user_processes, usuarios_dict, tipos_dict)
 
 # --- Filtros ---
 st.markdown("### 🎯 Filtros")
