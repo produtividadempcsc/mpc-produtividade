@@ -574,7 +574,8 @@ else:
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         with f_col1:
             opcoes_status = ["No Prazo", "Atrasado", "Devolvido", "Concluído", "Finalizado"]
-            filtro_status = st.multiselect("📊 Status", options=opcoes_status, key="servidor_status_filter")
+            default_status = ["No Prazo", "Atrasado", "Devolvido"]
+            filtro_status = st.multiselect("📊 Status", options=opcoes_status, default=default_status, key="servidor_status_filter")
             st.text_input("👤 Servidor", value=servidor_logado.get('nome_completo', '') if servidor_logado else '', disabled=True)
         with f_col2:
             filtro_chefe_nomes = st.multiselect("👔 Chefe de Gabinete", options=list(chefes_vinculados.keys()), key="servidor_chefe_filter")
