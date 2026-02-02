@@ -1,7 +1,7 @@
 import auth
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from sidebar import build_sidebar
 
 # Módulos do projeto
