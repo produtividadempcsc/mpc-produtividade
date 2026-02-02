@@ -175,11 +175,11 @@ def _get_user_hierarchy():
     for u in all_users:
         if u.get('perfil') == 'Chefe de Gabinete':
             # Get servidores linked to this chefe via gabinete_servidores table
-            servs = QueryBuilder("gabinete_servidores").eq("id_chefe", u.get('id')).execute()
-            servidor_ids = [s.get('id_servidor') for s in servs]
+            servs = QueryBuilder("gabinete_servidores").eq("chefe_id", u.get('id')).execute()
+            servidor_ids = [s.get('servidor_id') for s in servs]
             # Get procuradores linked via procurador_chefes table
-            procs = QueryBuilder("procurador_chefes").eq("id_chefe", u.get('id')).execute()
-            proc_ids = [p.get('id_procurador') for p in procs]
+            procs = QueryBuilder("procurador_chefes").eq("chefe_id", u.get('id')).execute()
+            proc_ids = [p.get('procurador_id') for p in procs]
             chefes[u.get('id')] = {
                 "nome": u.get('nome_completo'),
                 "servidores": servidor_ids,
@@ -190,8 +190,8 @@ def _get_user_hierarchy():
     procuradores = {}
     for u in all_users:
         if u.get('perfil') == 'Procurador':
-            chefes_links = QueryBuilder("procurador_chefes").eq("id_procurador", u.get('id')).execute()
-            chefe_ids = [c.get('id_chefe') for c in chefes_links]
+            chefes_links = QueryBuilder("procurador_chefes").eq("procurador_id", u.get('id')).execute()
+            chefe_ids = [c.get('chefe_id') for c in chefes_links]
             procuradores[u.get('id')] = {
                 "nome": u.get('nome_completo'),
                 "chefes": chefe_ids
