@@ -8,6 +8,7 @@ MENU_ITEMS = {
     "Meu Perfil": "pages/Meu_Perfil.py",
     "Administração": "pages/Administracao.py",
     "Meus Processos": "pages/Meus_Processos.py",
+    "Meus Dados": "pages/Meus_Dados.py",
     "Processos MPC": "pages/Processos_MPC.py",
     "Processos no Gabinete": "pages/Processos_no_Gabinete.py",
     "Processos para Revisão": "pages/Processos_para_Revisao.py",
@@ -22,7 +23,7 @@ MENU_ITEMS = {
 
 PROFILE_MENUS = {
     "Administrador": ["Meu Perfil", "Administração", "Gerenciar Usuários", "Processos MPC", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
-    "Servidor": ["Meu Perfil", "Meus Processos", "Página Analítica", "Central IA", "Gestão de Afastamentos", "Manual do Usuário"],
+    "Servidor": ["Meu Perfil", "Meus Processos", "Meus Dados", "Central IA", "Gestão de Afastamentos", "Manual do Usuário"],
     "Chefe de Gabinete": ["Meu Perfil", "Meus Processos", "Processos no Gabinete", "Processos para Revisão", "Processos com Procurador", "Gerenciar Usuários", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
     "Procurador": ["Meu Perfil", "Processos MPC", "Página Analítica", "Central IA", "Gestão de Afastamentos", "Gerenciar Substituições", "Manual do Usuário"]
 }
