@@ -232,20 +232,20 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                 active_perfil = st.session_state.get("active_perfil")
 
                 with b1:
-                    if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path == 'Pages/Meus_Processos.py':
+                    if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path.lower() == 'pages/meus_processos.py':
                         if status_serv not in ["Concluído", "Finalizado"]:
                             if st.button("Atualizar", key=f"fav_update_serv_{pid}", type="primary", width='stretch'):
                                 st.session_state['processo_para_atualizar_id'] = pid
                                 st.rerun()
-                    elif active_perfil in ["Procurador", "Administrador"] and current_page_path == 'Pages/Processos_MPC.py':
+                    elif active_perfil in ["Procurador", "Administrador"] and current_page_path.lower() == 'pages/processos_mpc.py':
                         if st.button("Editar", key=f"fav_edit_mpc_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
-                    elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_para_Revisao.py':
+                    elif active_perfil == "Chefe de Gabinete" and current_page_path.lower() == 'pages/processos_para_revisao.py':
                          if st.button("Analisar", key=f"fav_analise_rev_{pid}", type="primary", width='stretch'):
                             st.session_state['processo_em_analise_id'] = pid
                             st.rerun()
-                    elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_no_Gabinete.py':
+                    elif active_perfil == "Chefe de Gabinete" and current_page_path.lower() == 'pages/processos_no_gabinete.py':
                         if st.button("Editar", key=f"fav_edit_gab_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
@@ -259,7 +259,7 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                     if st.button(lbl, key=f"fav_comments_{pid}", width='stretch', type=typ):
                         st.session_state['processo_id'] = pid
                         st.session_state['came_from'] = current_page_path
-                        st.switch_page('Pages/Comentarios_Processo.py')
+                        st.switch_page('pages/Comentarios_Processo.py')
 
                 with b4:
                     if st.button("Histórico", key=f"fav_hist_{pid}", width='stretch'):
@@ -330,20 +330,20 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                 active_perfil = st.session_state.get("active_perfil")
 
                 with b1:
-                    if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path == 'Pages/Meus_Processos.py':
+                    if active_perfil in ["Servidor", "Chefe de Gabinete"] and current_page_path.lower() == 'pages/meus_processos.py':
                         if status_serv not in ["Concluído", "Finalizado"]:
                             if st.button("Atualizar Andamento", key=f"susp_update_serv_{pid}", type="primary", width='stretch'):
                                 st.session_state['processo_para_atualizar_id'] = pid
                                 st.rerun()
-                    elif active_perfil in ["Procurador", "Administrador"] and current_page_path == 'Pages/Processos_MPC.py':
+                    elif active_perfil in ["Procurador", "Administrador"] and current_page_path.lower() == 'pages/processos_mpc.py':
                         if st.button("Editar Processo", key=f"susp_edit_mpc_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
-                    elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_para_Revisao.py':
+                    elif active_perfil == "Chefe de Gabinete" and current_page_path.lower() == 'pages/processos_para_revisao.py':
                          if st.button("Analisar Processo", key=f"susp_analise_rev_{pid}", type="primary", width='stretch'):
                             st.session_state['processo_em_analise_id'] = pid
                             st.rerun()
-                    elif active_perfil == "Chefe de Gabinete" and current_page_path == 'Pages/Processos_no_Gabinete.py':
+                    elif active_perfil == "Chefe de Gabinete" and current_page_path.lower() == 'pages/processos_no_gabinete.py':
                         if st.button("Editar Processo", key=f"susp_edit_gab_{pid}", width='stretch'):
                             st.session_state['processo_para_editar_id'] = pid
                             st.rerun()
@@ -355,7 +355,7 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                     if st.button(lbl, key=f"susp_comments_{pid}", width='stretch', type=typ):
                         st.session_state['processo_id'] = pid
                         st.session_state['came_from'] = current_page_path
-                        st.switch_page('Pages/Comentarios_Processo.py')
+                        st.switch_page('pages/Comentarios_Processo.py')
 
                 with b3:
                     if st.button("Ver Histórico", key=f"susp_hist_{pid}", width='stretch'):
