@@ -1,13 +1,33 @@
 
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 from typing import List, Dict, Any, Callable
+import pytz
 from thefuzz import fuzz
 from supabase_client import QueryBuilder, insert, select_all
 from db_compat import (
     get_product_type_by_id, calculate_due_date, select_all
 )
+
+# --- FUNÇÕES DE FUSO HORÁRIO DO BRASIL ---
+# O sistema roda no Streamlit Cloud (UTC), mas os usuários estão no Brasil (GMT-3)
+
+BRAZIL_TZ = pytz.timezone('America/Sao_Paulo')
+
+def now_brazil() -> datetime:
+    """
+    Retorna o datetime atual no fuso horário do Brasil (America/Sao_Paulo).
+    Use esta função em vez de datetime.now() para garantir horário correto.
+    """
+    return datetime.now(BRAZIL_TZ)
+
+def today_brazil() -> date:
+    """
+    Retorna a data atual no fuso horário do Brasil (America/Sao_Paulo).
+    Use esta função em vez de date.today() para garantir data correta.
+    """
+    return datetime.now(BRAZIL_TZ).date()
 
 # --- FUNÇÕES DE TEXTO E NORMALIZAÇÃO ---
 
@@ -101,7 +121,7 @@ def get_servidor_status(processo: dict, db_session=None) -> str:
         dias_suspensos=processo.get('prazo_total_dias_suspenso')
     )
 
-    if date.today() > data_final_servidor:
+    if today_brazil() > data_final_servidor:
         return "Atrasado"
     else:
         return "No Prazo"
