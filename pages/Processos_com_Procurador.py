@@ -12,7 +12,7 @@ import relatorios
 import utils.ui as ui_utils
 import utils.common as common_utils
 import relatorios
-from supabase_client import select_all, QueryBuilder, insert, delete_by_id
+from supabase_client import select_all, QueryBuilder, insert, delete_by_id, update_by_id
 from db_compat import get_user_by_id, toggle_process_favorite, is_process_favorite
 
 import auth
@@ -623,13 +623,13 @@ try:
 
                 with fav_col2:
                     if st.button("✅ Marcar como Finalizado", key=f"fav_finalizar_{p_id}", width='stretch', type="primary"):
-                        QueryBuilder("processos").update({"status_chefe": "Finalizado", "status_servidor": "Finalizado"}).eq("id", p_id).execute()
+                        update_by_id("processos", p_id, {"status_chefe": "Finalizado", "status_servidor": "Finalizado"})
                         st.success(f"✅ Processo {p.get('processo_numero')} finalizado!")
                         st.rerun()
                 
                 with fav_col3:
                     if st.button("↩️ Devolver para o Gabinete", key=f"fav_devolver_{p_id}", width='stretch'):
-                         QueryBuilder("processos").update({"status_chefe": "Aguardando Análise", "status_servidor": "Concluído"}).eq("id", p_id).execute()
+                         update_by_id("processos", p_id, {"status_chefe": "Aguardando Análise", "status_servidor": "Concluído"})
                          st.warning(f"↩️ Processo {p.get('processo_numero')} devolvido para revisão!")
                          st.rerun()
                 
@@ -802,7 +802,7 @@ try:
 
                 with b_col2:
                     if st.button("✅ Marcar como Finalizado", key=f"procurador_concluiu_{p['id']}", width='stretch', type="primary"):
-                        QueryBuilder("processos").update({"status_chefe": "Finalizado", "status_servidor": "Finalizado"}).eq("id", p['id']).execute()
+                        update_by_id("processos", p['id'], {"status_chefe": "Finalizado", "status_servidor": "Finalizado"})
                         # Unfavorite logic should handle itself or be ignored here based on UI
                         if p['id'] in favoritos_cache:
                             toggle_process_favorite(st.session_state.user_id, p['id']) # Remove
@@ -811,7 +811,7 @@ try:
                 
                 with b_col3:
                     if st.button("↩️ Devolver para o Gabinete", key=f"procurador_devolve_{p['id']}", width='stretch'):
-                        QueryBuilder("processos").update({"status_chefe": "Aguardando Análise", "status_servidor": "Concluído"}).eq("id", p['id']).execute()
+                        update_by_id("processos", p['id'], {"status_chefe": "Aguardando Análise", "status_servidor": "Concluído"})
                         if p['id'] in favoritos_cache:
                             toggle_process_favorite(st.session_state.user_id, p['id']) # Remove
                         st.warning(f"↩️ Processo {p.get('processo_numero')} devolvido para revisão!")
