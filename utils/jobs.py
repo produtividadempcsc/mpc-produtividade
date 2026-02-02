@@ -7,6 +7,7 @@ from db_compat import (
     calculate_due_date, is_business_day
 )
 from utils.notifications import send_email_notification
+from utils.common import today_brazil, now_brazil
 
 def update_process_statuses():
     """
@@ -55,7 +56,7 @@ def update_process_statuses():
 
         # --- ETAPA 2: ATUALIZAÇÃO DE STATUS ---
         print(f"[{datetime.now()}] ETAPA 2: Atualizando status de processos ativos...")
-        hoje = date.today()
+        hoje = today_brazil()
         status_updates_count = 0
 
         # Sub-etapa 2.1: Servidor
@@ -167,7 +168,7 @@ def initialize_restored_data():
 
         produtos_map = {p['id']: p for p in todos_produtos}
         
-        hoje = date.today()
+        hoje = today_brazil()
         updates = []
         
         for processo in todos_processos:
@@ -294,7 +295,7 @@ def send_deadline_notifications():
     (Versão Supabase)
     """
     try:
-        hoje = date.today()
+        hoje = today_brazil()
         # Adicionado verificação de dia útil
         if not is_business_day(hoje):
             print(f"INFO: Hoje não é um dia útil. Nenhuma notificação de prazo será enviada.")
