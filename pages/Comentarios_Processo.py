@@ -391,7 +391,7 @@ st.markdown("""
 # Verificar se processo está selecionado
 if 'processo_id' not in st.session_state:
     st.error("⚠️ Nenhum processo selecionado. Redirecionando...")
-    st.switch_page("pages/meus_processos.py")
+    st.switch_page("pages/Meus_Processos.py")
     st.stop()
 
 processo_id = st.session_state['processo_id']
@@ -401,7 +401,7 @@ processo = processo_list[0] if processo_list else None
 
 if not processo:
     st.error("❌ Processo não encontrado.")
-    st.switch_page("pages/meus_processos.py")
+    st.switch_page("pages/Meus_Processos.py")
     st.stop()
 
 # Header principal do sistema
@@ -422,7 +422,7 @@ with col2:
         if 'came_from' in st.session_state:
             st.switch_page(st.session_state['came_from'])
         else:
-            st.switch_page("pages/meus_processos.py")
+            st.switch_page("pages/Meus_Processos.py")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Buscar todos os comentários
