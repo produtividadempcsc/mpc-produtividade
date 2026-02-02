@@ -587,7 +587,7 @@ else:
             filtro_tipo_produto_nomes = st.multiselect("📝 Tipo de Processo", options=list(todos_tipos_produto.keys()), key="servidor_tipo_produto_filter")
             ordenar_por = st.selectbox("📈 Ordenar por", ["Mais Recentes", "Mais Antigos", "Prazo Restante (Crescente)", "Prazo Restante (Decrescente)"], key="servidor_ordenar")
     
-    utils.display_icon_legend()
+    ui_utils.display_icon_legend()
 
     # --- QUERY via Supabase API ---
     processos_filtrados = all_user_processes  # Start with all user processes
@@ -610,7 +610,7 @@ else:
         processos_filtrados = [p for p in processos_filtrados if p.get('id_tipo_produto') in ids_tipos_produto]
     
     if filtro_numero_processo:
-        processos_filtrados = utils.filter_by_similarity(
+        processos_filtrados = common_utils.filter_by_similarity(
             search_term=filtro_numero_processo,
             items=processos_filtrados,
             key_func=lambda p: p.get('processo_numero', '')
@@ -639,7 +639,7 @@ else:
         else:
             continue
             
-        data_final = utils.calculate_due_date(
+        data_final = calculate_due_date(
             data_atrib, 
             p.get('prazo_servidor_aplicado'), 
             produto_obj.get('tipo_contagem_prazo'), 
@@ -720,9 +720,9 @@ else:
             p_nao_se_aplica_prazo = processo.get('nao_se_aplica_prazo_servidor', False)
             p_status_chefe = processo.get('status_chefe', '')
             
-            status_icon = utils.get_status_emoji(p_status_servidor)
+            status_icon = ui_utils.get_status_emoji(p_status_servidor)
             priority_icon = get_priority_icon(p_prioridade)
-            tem_nao_lidos = utils.has_unread_comments(p_id, st.session_state.user_id)
+            tem_nao_lidos = common_utils.has_unread_comments(p_id, st.session_state.user_id)
             unread_icon = "💬" if tem_nao_lidos else ""
             
             # Card do processo com estilo personalizado
@@ -763,7 +763,7 @@ else:
                     else:
                         data_atrib = data_atrib_str
                     
-                    data_final_calculada = utils.calculate_due_date(
+                    data_final_calculada = calculate_due_date(
                         data_atrib, 
                         processo.get('prazo_servidor_aplicado'), 
                         produto_obj.get('tipo_contagem_prazo') if produto_obj else 'dias uteis', 
