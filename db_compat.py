@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import date, datetime, timedelta
 from supabase_client import supabase, QueryBuilder, select_all, select_by_id, select_where, select_first, insert, update_by_id, delete_by_id
+from utils.common import now_brazil, today_brazil
 
 from repositories.calendar_repository import get_all_holidays, is_business_day, get_holidays_only, upsert_calendar_entry
 from repositories.afastamento_repository import (
@@ -144,7 +145,7 @@ def create_notification(user_id: int, message: str):
             "id_usuario_destino": user_id,
             "mensagem": message,
             "lida": False,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": now_brazil().isoformat()
         }
         result = insert("notificacoes", data)
         print(f"Notificação criada para o usuário {user_id}: {message}")
@@ -193,7 +194,7 @@ def add_process_history(process_id: int, user_id: int, action: str, details: str
         "id_usuario_acao": user_id,
         "evento": action,
         "observacao": details,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": now_brazil().isoformat()
     }
     return insert("processo_historico", data)
 
@@ -204,7 +205,7 @@ def add_process_history(process_id: int, user_id: int, action: str, details: str
 
 def get_active_substitution(user_id: int):
     """Verifica se o usuário tem uma substituição ativa."""
-    hoje = date.today().isoformat()
+    hoje = today_brazil().isoformat()
     
     result = QueryBuilder("substituicoes") \
         .eq("id_servidor_substituto", user_id) \
@@ -233,7 +234,7 @@ def add_comment(process_id: int, user_id: int, text: str):
         "id_processo": process_id,
         "id_usuario": user_id,
         "texto": text,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": now_brazil().isoformat()
     }
     return insert("comentarios", data)
 
@@ -551,7 +552,7 @@ def get_prompt_by_id(prompt_id: int) -> dict:
 def create_prompt(data: dict) -> dict:
     """Cria um novo prompt IA."""
     if 'data_criacao' not in data:
-        data['data_criacao'] = datetime.now().isoformat()
+        data['data_criacao'] = now_brazil().isoformat()
     return insert("prompts_ia", data)
 
 def update_prompt(prompt_id: int, data: dict):
@@ -574,7 +575,7 @@ def get_all_product_types() -> list:
 def create_product_type(data: dict) -> dict:
     """Cria um novo tipo de produto."""
     if 'data_criacao' not in data:
-        data['data_criacao'] = datetime.now().isoformat()
+        data['data_criacao'] = now_brazil().isoformat()
     if 'versao' not in data:
         data['versao'] = 1
     return insert("tipos_produto", data)
