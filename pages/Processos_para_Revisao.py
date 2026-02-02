@@ -747,7 +747,7 @@ else:
 
                     st.markdown('<div class="action-buttons">', unsafe_allow_html=True)
                     
-                    action_cols = st.columns([1, 2, 2, 2, 2])
+                    action_cols = st.columns([0.2, 1, 1, 1])
                     
                     with action_cols[0]:
                         is_favorito = p_id in favoritos_cache
@@ -767,13 +767,10 @@ else:
                         button_type = "primary" if tem_nao_lidos else "secondary"
                         if st.button(button_label, key=f"comments_proc_{p_id}", width='stretch', type=button_type):
                             st.session_state['processo_id'] = p_id
-                            st.session_state['came_from'] = 'Pages/Processos_para_Revisao.py'
+                            st.session_state['came_from'] = 'pages/Processos_para_Revisao.py'
                             st.switch_page('Pages/Comentarios_Processo.py')
                     
                     with action_cols[3]:
-                        st.empty() # Botão 'Ver Processo' removido
-                    
-                    with action_cols[4]:
                         if st.button("📜 Histórico", key=f"hist_rev_{p_id}", width='stretch'):
                             st.session_state.history_visible_rev[p_id] = not st.session_state.history_visible_rev.get(p_id, False)
                             st.rerun()
