@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import date, datetime, timedelta
 from supabase_client import supabase, QueryBuilder, select_all, select_by_id, select_where, select_first, insert, update_by_id, delete_by_id
-from utils.common import now_brazil, today_brazil
+from utils.timezone import now_brazil, today_brazil
 
 from repositories.calendar_repository import get_all_holidays, is_business_day, get_holidays_only, upsert_calendar_entry
 from repositories.afastamento_repository import (
