@@ -712,6 +712,10 @@ else:
         all_users = select_all("usuarios")
         users_map = {u.get('id'): u for u in all_users}
 
+        # Batch check for unread comments (optimization: 2 queries instead of N*2)
+        paginated_processo_ids = [p[0].get('id') for p in paginated_items]
+        unread_comments_cache = common_utils.batch_has_unread_comments(paginated_processo_ids, st.session_state.user_id)
+
         for processo, dias_restantes in paginated_items:
             p_id = processo.get('id')
             p_status_servidor = processo.get('status_servidor', '')
@@ -722,7 +726,7 @@ else:
             
             status_icon = ui_utils.get_status_emoji(p_status_servidor)
             priority_icon = get_priority_icon(p_prioridade)
-            tem_nao_lidos = common_utils.has_unread_comments(p_id, st.session_state.user_id)
+            tem_nao_lidos = unread_comments_cache.get(p_id, False)  # Uses batch cache
             unread_icon = "💬" if tem_nao_lidos else ""
             
             # Card do processo com estilo personalizado
