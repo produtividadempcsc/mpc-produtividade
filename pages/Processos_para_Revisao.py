@@ -500,7 +500,7 @@ else:
 
     
     user_id = st.session_state.user_id
-    ui_utils.display_favoritos_expander(None, user_id, 'pages/Processos_para_Revisao.py')
+    ui_utils.display_favoritos_expander(None, user_id, 'Pages/Processos_para_Revisao.py')
     
     try:
         id_chefe = st.session_state.active_user_id
@@ -767,8 +767,8 @@ else:
                         button_type = "primary" if tem_nao_lidos else "secondary"
                         if st.button(button_label, key=f"comments_proc_{p_id}", width='stretch', type=button_type):
                             st.session_state['processo_id'] = p_id
-                            st.session_state['came_from'] = 'pages/Processos_para_Revisao.py'
-                            st.switch_page('pages/Comentarios_Processo.py')
+                            st.session_state['came_from'] = 'Pages/Processos_para_Revisao.py'
+                            st.switch_page('Pages/Comentarios_Processo.py')
                     
                     with action_cols[3]:
                         st.empty() # Botão 'Ver Processo' removido
