@@ -636,6 +636,14 @@ else:
             favs_rows = QueryBuilder("processo_favoritos").eq("id_usuario", st.session_state.user_id).select("id_processo").execute()
             favoritos_cache = {r['id_processo'] for r in favs_rows}
 
+            # Fetch attachment info for processes
+            processo_ids_ordenados = [item["processo"]['id'] for item in processos_ordenados]
+            anexos_rows = QueryBuilder("anexos_processos").in_list("id_processo", processo_ids_ordenados).select("id_processo").execute()
+            anexos_cache = {r['id_processo'] for r in anexos_rows}
+
+            # Batch check for unread comments (optimization: 2 queries instead of N*2)
+            unread_comments_cache = common_utils.batch_has_unread_comments(processo_ids_ordenados, st.session_state.user_id)
+
             if 'history_visible_rev' not in st.session_state:
                 st.session_state.history_visible_rev = {}
 
@@ -661,7 +669,7 @@ else:
                 status_geral = processo.get('status_chefe')
                 status_icon = ui_utils.get_status_emoji(status_geral)
                 priority_icon = get_priority_icon(processo.get('prioridade'))
-                tem_nao_lidos = common_utils.has_unread_comments(p_id, st.session_state.user_id)
+                tem_nao_lidos = unread_comments_cache.get(p_id, False)  # Uses batch cache
                 unread_icon = "💬" if tem_nao_lidos else ""
                 tem_anexo = p_id in anexos_cache
                 anexo_icon = "📎" if tem_anexo else ""
