@@ -523,7 +523,18 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    jobs_utils.update_process_statuses()
+    # --- JOB DE ATUALIZAÇÃO (Debounced) ---
+    # Evita rodar a cada rerun, apenas a cada 10 minutos
+    last_run = st.session_state.get('last_update_job_run')
+    should_run = True
+    if last_run:
+        if datetime.now() - last_run < timedelta(minutes=10):
+            should_run = False
+    
+    if should_run:
+        jobs_utils.update_process_statuses()
+        st.session_state['last_update_job_run'] = datetime.now()
+
     
     try:
         id_chefe_para_acoes = st.session_state.active_user_id
@@ -1030,5 +1041,4 @@ else:
         st.error(f"Erro ao carregar dashboard: {e}")
         import traceback
         st.code(traceback.format_exc())
-
 
