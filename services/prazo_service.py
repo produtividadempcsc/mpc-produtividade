@@ -135,3 +135,25 @@ def count_business_days(start_date: date, end_date: date):
         data_atual += timedelta(days=1)
     
     return dias_uteis_contados
+
+def calculate_net_duration_calendar(start_date: date, end_date: date, id_usuario: int, manual_suspension_days: int = 0):
+    """
+    Calcula a duração líquida em dias corridos:
+    (Data Fim - Data Início + 1) - Dias de Afastamento - Dias Suspensão Manual.
+    """
+    if not start_date or not end_date or start_date > end_date:
+        return 0
+    
+    # 1. Base Calendar Days
+    total_calendar = (end_date - start_date).days + 1
+    
+    # 2. Subtract Recorded Leaves (Afastamentos DB)
+    leave_days = get_leave_days_for_period(start_date, end_date, id_usuario)
+    
+    # 3. Subtract Manual Suspension (from Process record)
+    # Ensure we don't double count if manual suspension overlaps with leave?
+    # Usually manual suspension is separate. We assume additive reduction logic as per user request.
+    
+    net_duration = total_calendar - leave_days - manual_suspension_days
+    
+    return max(0, net_duration)
