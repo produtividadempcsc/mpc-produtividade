@@ -13,6 +13,8 @@ from utils.common import generate_nome_id
 import relatorios
 import reports_corregedoria
 from utils.jobs import initialize_restored_data # Importação para pós-processamento de restore
+import ui_utils
+import backup
 
 
 from db_compat import (
