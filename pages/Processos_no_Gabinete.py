@@ -859,11 +859,9 @@ else:
             hoje = date.today()
             processos_com_dados = []
             
-            # Usando caches já carregados no início da página (evita queries duplicadas)
-            # produtos_cache e usuarios_cache foram definidos no bloco de cache centralizado
-            
-            # Cache de nomes de usuários para exibição
-            usuarios_nomes_cache = {u['id']: u.get('nome_completo', 'N/A') for u in all_users_list}
+            # Usando caches já carregados no início da página (evita queries duplicadas):
+            # - produtos_cache: {id: produto_dict}
+            # - usuarios_cache: {id: usuario_dict}
             
             # Attachments check cache
             # Query all attachments IDs where process in filtered list?
@@ -898,8 +896,8 @@ else:
                     "nome_produto": produto_obj.get('nome_produto'),
                     "descricao_produto": produto_obj.get('descricao'),
                     "template_path": produto_obj.get('template_path'),
-                    "servidor_nome": usuarios_cache.get(p.get('id_servidor_responsavel'), "N/A"),
-                    "procurador_nome": usuarios_cache.get(p.get('id_procurador'), "N/A"),
+                    "servidor_nome": usuarios_cache.get(p.get('id_servidor_responsavel'), {}).get('nome_completo', 'N/A'),
+                    "procurador_nome": usuarios_cache.get(p.get('id_procurador'), {}).get('nome_completo', 'N/A'),
                     "possui_anexo": p_id in anexos_cache,
                     "is_favorito": p_id in favoritos_cache,
                     "tem_nao_lidos": unread_comments_cache.get(p_id, False)  # Uses batch cache
