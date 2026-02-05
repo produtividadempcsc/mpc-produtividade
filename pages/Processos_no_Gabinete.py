@@ -680,11 +680,11 @@ else:
                     }
                     
                     res_proc = insert("processos", novo_processo_data)
-                    # res_proc.data is list of inserted rows
-                    if not res_proc or not res_proc.data:
+                    # insert() returns the inserted dict directly, or None on error
+                    if not res_proc:
                         st.error("Erro ao criar processo.")
                     else:
-                        novo_pid = res_proc.data[0]['id']
+                        novo_pid = res_proc['id']
 
                         if observacao_chefe:
                             comentario_data = {
