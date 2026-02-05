@@ -1002,7 +1002,7 @@ else:
                          """, unsafe_allow_html=True)
                          
                          # Actions
-                         act_c1, act_c2, act_c3 = st.columns(3)
+                         act_c1, act_c2, act_c3, act_c4 = st.columns(4)
                          with act_c1:
                              label = "⭐ Remover Favorito" if item['is_favorito'] else "☆ Adicionar Favorito"
                              if st.button(label, key=f"fav_btn_{pid}"):
@@ -1013,6 +1013,12 @@ else:
                                  st.session_state.processo_para_editar_id = pid
                                  st.rerun()
                          with act_c3:
+                             # Indicador de comentários não lidos
+                             comment_label = "💬 Comentários" if not item['tem_nao_lidos'] else "💬 Comentários 🔴"
+                             if st.button(comment_label, key=f"comment_btn_{pid}"):
+                                 st.session_state['processo_comentario_id'] = pid
+                                 st.switch_page("pages/Comentarios_Processo.py")
+                         with act_c4:
                               if st.button("📜 Histórico", key=f"hist_btn_{pid}"):
                                    if not st.session_state.get(f"show_hist_{pid}"):
                                        st.session_state[f"show_hist_{pid}"] = True
