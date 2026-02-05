@@ -25,6 +25,8 @@ from db_compat import (
     calculate_due_date, 
     calculate_due_date_with_details,
     get_all_users,
+    get_all_users_cached,
+    get_all_product_types_cached,
     get_direct_servants,
     get_user_subordinates,
     get_prosecutors_of_boss,
@@ -539,30 +541,40 @@ else:
     try:
         id_chefe_para_acoes = st.session_state.active_user_id
         
-        # --- KPIs ---
+        # =======================================================================
+        # CACHE CENTRALIZADO - Evita múltiplas queries duplicadas
+        # =======================================================================
+        # Cache de usuários (usado em múltiplos lugares da página)
+        all_users_list = get_all_users_cached()
+        usuarios_cache = {u['id']: u for u in all_users_list}
+        
+        # Cache de tipos de produto (era carregado 3x antes)
+        all_prods_cached = get_all_product_types_cached()
+        produtos_cache = {p['id']: p for p in all_prods_cached}
+        
+        # Procuradores (era carregado 2x antes)
+        procuradores_vinculados = get_prosecutors_of_boss(id_chefe_para_acoes)
+        procuradores_vinculados.sort(key=lambda x: x.get('nome_completo', ''))
+        procuradores_dict = {p['nome_completo']: p['id'] for p in procuradores_vinculados if p.get('ativo', True)}
+        
+        # --- KPIs (Consolidado em uma única query) ---
         with st.spinner("Atualizando indicadores..."):
-            # 1. Com Servidores: chefe=me, concluded_serv=null
-            kpi_serv = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe_para_acoes).is_null("data_conclusao_servidor").execute()
-            total_com_servidores = len(kpi_serv)
-
-            # 2. Para Revisão: chefe=me, concluded_serv!=null, status_chefe in [...]
-            # Supabase API for NOT NULL is filter 'not.is.null', using QueryBuilder logic if available, or fetch all relevant and filter python
-            # QueryBuilder support is via `neq("data_conclusao_servidor", "null")` ideally or custom filter string
-            # Let's use Python filtering for safety if list is not huge, or specific query.
-            # But efficiently: query status_chefe IN... AND chefe=me
-            kpi_rev = QueryBuilder("processos") \
+            # Uma única query busca todos os processos do chefe
+            # Os KPIs são calculados em Python ao invés de 3 queries separadas
+            all_processos_chefe = QueryBuilder("processos") \
                 .eq("id_chefe_gabinete", id_chefe_para_acoes) \
-                .in_list("status_chefe", ['Aguardando Análise', 'Revisão Atrasada']) \
                 .execute()
-            # Ensure concluded_serv is not null? Usually implied by status_chefe but safe to check
-            total_para_revisao = len([p for p in kpi_rev if p.get('data_conclusao_servidor') is not None])
             
-            # 3. Com Procurador
-            kpi_proc = QueryBuilder("processos") \
-                .eq("id_chefe_gabinete", id_chefe_para_acoes) \
-                .eq("status_chefe", "Processo com o Procurador") \
-                .execute()
-            total_com_procurador = len(kpi_proc)
+            # Calcular KPIs em Python
+            total_com_servidores = len([p for p in all_processos_chefe 
+                                        if p.get('data_conclusao_servidor') is None])
+            
+            total_para_revisao = len([p for p in all_processos_chefe 
+                                      if p.get('status_chefe') in ['Aguardando Análise', 'Revisão Atrasada'] 
+                                      and p.get('data_conclusao_servidor') is not None])
+            
+            total_com_procurador = len([p for p in all_processos_chefe 
+                                        if p.get('status_chefe') == "Processo com o Procurador"])
 
         # KPIs com estilo personalizado
         st.markdown(f"""
@@ -606,25 +618,17 @@ else:
                 if chefe_logado:
                     servidores_dict[chefe_logado['nome_completo']] = id_chefe_para_acoes
                 
-                # Fetch products
-                all_prods = select_all("tipos_produto")
-                # Group by logic: dict by name, keep latest/first? Original sorted by name.
-                produtos_dict = {}
-                # Sort first
-                all_prods.sort(key=lambda x: x.get('nome_produto', ''))
-                for p in all_prods:
-                     if p['nome_produto'] not in produtos_dict:
-                         produtos_dict[p['nome_produto']] = p['id']
-
-                # Procuradores
-                procuradores_vinculados = get_prosecutors_of_boss(id_chefe_para_acoes)
-                procuradores_vinculados.sort(key=lambda x: x.get('nome_completo', ''))
-                procuradores_dict = {p['nome_completo']: p['id'] for p in procuradores_vinculados if p.get('ativo', True)}
+                # Usando cache de produtos já carregado no início (evita query duplicada)
+                produtos_form_dict = {}
+                prods_sorted = sorted(all_prods_cached, key=lambda x: x.get('nome_produto', ''))
+                for p in prods_sorted:
+                     if p['nome_produto'] not in produtos_form_dict:
+                         produtos_form_dict[p['nome_produto']] = p['id']
                             
                 col1, col2 = st.columns(2)
                 with col1:
                     processo_numero = st.text_input("📄 Número do Processo")
-                    id_tipo_produto_nome = st.selectbox("📋 Tipo de Produto", options=list(produtos_dict.keys()))
+                    id_tipo_produto_nome = st.selectbox("📋 Tipo de Produto", options=list(produtos_form_dict.keys()))
                 with col2:
                     if not servidores_dict:
                         id_servidor_nome = st.selectbox("👤 Atribuir ao Servidor", options=["Nenhum servidor vinculado ao seu gabinete"], disabled=True)
@@ -746,9 +750,9 @@ else:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Seções de favoritos e suspensos
-        ui_utils.display_favoritos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py')
-        ui_utils.display_suspensos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py')
+        # Seções de favoritos e suspensos (passando cache de usuários para evitar N+1)
+        ui_utils.display_favoritos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py', usuarios_cache=usuarios_cache)
+        ui_utils.display_suspensos_expander(None, id_chefe_para_acoes, 'pages/Processos_no_Gabinete.py', usuarios_cache=usuarios_cache)
         
         st.markdown("---")
         
@@ -760,15 +764,14 @@ else:
             servidores_nomes_equipe.insert(0, chefe_logado['nome_completo'])
         servidores_nomes_equipe.sort()
 
-        procuradores_vinculados2 = get_prosecutors_of_boss(id_chefe_para_acoes)
-        procuradores_dict2 = {p['nome_completo']: p['id'] for p in procuradores_vinculados2}
+        # Usando cache de procuradores já carregado (evita query duplicada)
+        # procuradores_dict já foi definido no cache centralizado
         
-        # All products map
-        all_prods_unique = {}
-        for p in select_all("tipos_produto"):
-             if p['nome_produto'] not in all_prods_unique:
-                 all_prods_unique[p['nome_produto']] = p['id']
-        todos_tipos_produto = all_prods_unique
+        # Usando cache de produtos já carregado (evita 3ª query duplicada)
+        todos_tipos_produto = {}
+        for p in all_prods_cached:
+             if p['nome_produto'] not in todos_tipos_produto:
+                 todos_tipos_produto[p['nome_produto']] = p['id']
 
         filtro_numero_processo = st.text_input("🔍 Filtrar por Número do Processo:", key="chefe_filtro_num", placeholder="Digite o número do processo...")
         
@@ -778,7 +781,7 @@ else:
             filtro_status = st.multiselect("📊 Status", options=opcoes_status, default=st.session_state.get('chefe_filtro_status', []))
             filtro_servidor = st.multiselect("👤 Servidor", options=servidores_nomes_equipe, default=st.session_state.get('chefe_filtro_servidor', []))
         with filtros_col2:
-            filtro_procurador_nomes = st.multiselect("⚖️ Procurador", options=list(procuradores_dict2.keys()), default=st.session_state.get('chefe_filtro_procurador', []))
+            filtro_procurador_nomes = st.multiselect("⚖️ Procurador", options=list(procuradores_dict.keys()), default=st.session_state.get('chefe_filtro_procurador', []))
             filtro_tipo_produto_nomes = st.multiselect("📋 Tipo de Processo", options=list(todos_tipos_produto.keys()), default=st.session_state.get('chefe_filtro_tipo_produto', []))
         with filtros_col3:
             filtro_data_inicio = st.date_input("📅 De:", value=st.session_state.get('chefe_filtro_data_inicio'), key="chefe_di", format="DD/MM/YYYY")
@@ -955,7 +958,7 @@ else:
             displayed_items = processos_ordenados[start_idx:end_idx]
             
             if not displayed_items:
-                 st.info("Nenhum processo encontrado.")
+                st.info("Nenhum processo encontrado.")
             else:
                  # Display logic...
                  for item in displayed_items:
