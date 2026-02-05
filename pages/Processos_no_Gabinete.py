@@ -859,17 +859,11 @@ else:
             hoje = date.today()
             processos_com_dados = []
             
-            # Caches
-            # All products might be heavy if many versions. We already fetched unique.
-            # Let's fetch relevant ones if needed, or just fetch all since type table is small.
-            tipos_prod_all = select_all("tipos_produto")
-            produtos_cache = {p['id']: p for p in tipos_prod_all}
+            # Usando caches já carregados no início da página (evita queries duplicadas)
+            # produtos_cache e usuarios_cache foram definidos no bloco de cache centralizado
             
-            # Users cache - relevant for names.
-            # We can fetch distinct IDs involved in filtered processes to be efficient?
-            # Or just fetch all users (assuming < 1000 users).
-            all_users = get_all_users()
-            usuarios_cache = {u['id']: u['nome_completo'] for u in all_users}
+            # Cache de nomes de usuários para exibição
+            usuarios_nomes_cache = {u['id']: u.get('nome_completo', 'N/A') for u in all_users_list}
             
             # Attachments check cache
             # Query all attachments IDs where process in filtered list?
