@@ -741,7 +741,7 @@ else:
                             """
                             notif_utils.send_email_notification(servidor.get('email'), assunto, corpo)
                         
-                        st.success(f"✅ Processo {processo_numero} criado e atribuído com sucesso!")
+                        st.toast(f"✅ Processo {processo_numero} criado e atribuído com sucesso!", icon="✅")
                         st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
