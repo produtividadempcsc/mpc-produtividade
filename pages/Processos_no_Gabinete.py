@@ -542,7 +542,7 @@ else:
         # --- KPIs ---
         with st.spinner("Atualizando indicadores..."):
             # 1. Com Servidores: chefe=me, concluded_serv=null
-            kpi_serv = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe_para_acoes).is_("data_conclusao_servidor", "null").execute()
+            kpi_serv = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe_para_acoes).is_null("data_conclusao_servidor").execute()
             total_com_servidores = len(kpi_serv)
 
             # 2. Para Revisão: chefe=me, concluded_serv!=null, status_chefe in [...]
