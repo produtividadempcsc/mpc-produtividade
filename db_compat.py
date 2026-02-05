@@ -55,6 +55,18 @@ def get_all_users():
     return select_all("usuarios")
 
 
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_all_users_cached():
+    """Retorna todos os usuários (com cache)."""
+    return select_all("usuarios")
+
+
+@st.cache_data(ttl=600)  # Cache por 10 minutos
+def get_all_product_types_cached():
+    """Retorna todos os tipos de produto (com cache)."""
+    return select_all("tipos_produto")
+
+
 def get_active_users():
     """Retorna apenas usuários ativos."""
     return QueryBuilder("usuarios").eq("ativo", True).order("nome_completo").execute()
