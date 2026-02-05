@@ -1016,7 +1016,8 @@ else:
                              # Indicador de comentários não lidos
                              comment_label = "💬 Comentários" if not item['tem_nao_lidos'] else "💬 Comentários 🔴"
                              if st.button(comment_label, key=f"comment_btn_{pid}"):
-                                 st.session_state['processo_comentario_id'] = pid
+                                 st.session_state['processo_id'] = pid
+                                 st.session_state['came_from'] = "pages/Processos_no_Gabinete.py"
                                  st.switch_page("pages/Comentarios_Processo.py")
                          with act_c4:
                               if st.button("📜 Histórico", key=f"hist_btn_{pid}"):
