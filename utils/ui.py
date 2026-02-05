@@ -165,10 +165,15 @@ def display_file(file_content: bytes, file_name: str):
 
 # --- COMPONENTES DE EXPANSÃO (FAVORITOS / SUSPENSOS) ---
 
-def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
+def display_favoritos_expander(db=None, user_id=None, current_page_path=None, usuarios_cache=None):
     """
     Cria um expander com a lista de processos favoritos do usuário.
+    
+    Args:
+        usuarios_cache: Dict {user_id: user_dict} para evitar queries N+1
     """
+    from utils.common import batch_has_unread_comments
+    
     if 'history_visible_fav' not in st.session_state:
         st.session_state.history_visible_fav = {}
 
@@ -181,6 +186,9 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
         return
 
     processos = QueryBuilder("processos").in_list("id", fav_ids).execute()
+    
+    # Batch de comentários não lidos - 2 queries em vez de N*2
+    unread_cache = batch_has_unread_comments(fav_ids, user_id) if fav_ids else {}
     
     with st.expander(f"⭐ Meus Favoritos ({len(processos)})", expanded=False):
         for processo in processos:
@@ -200,9 +208,15 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                 st.markdown(expander_label)
                 cor_status = get_status_color(status_geral)
                 
-                chefe = get_user_by_id(processo.get('id_chefe_gabinete'))
-                proc = get_user_by_id(processo.get('id_procurador'))
-                serv = get_user_by_id(processo.get('id_servidor_responsavel'))
+                # Usar cache se disponível, senão query individual
+                if usuarios_cache:
+                    chefe = usuarios_cache.get(processo.get('id_chefe_gabinete'))
+                    proc = usuarios_cache.get(processo.get('id_procurador'))
+                    serv = usuarios_cache.get(processo.get('id_servidor_responsavel'))
+                else:
+                    chefe = get_user_by_id(processo.get('id_chefe_gabinete'))
+                    proc = get_user_by_id(processo.get('id_procurador'))
+                    serv = get_user_by_id(processo.get('id_servidor_responsavel'))
                 
                 chefe_nome = chefe.get('nome_completo') if chefe else "N/A"
                 procurador_nome = proc.get('nome_completo') if proc else "N/A"
@@ -253,7 +267,8 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                 with b2: st.empty()
 
                 with b3:
-                    tem_nao_lidos = has_unread_comments(pid, user_id)
+                    # Usar cache de unread
+                    tem_nao_lidos = unread_cache.get(pid, False)
                     lbl = "Comentários" + (" (!)" if tem_nao_lidos else "")
                     typ = "primary" if tem_nao_lidos else "secondary"
                     if st.button(lbl, key=f"fav_comments_{pid}", width='stretch', type=typ):
@@ -270,10 +285,15 @@ def display_favoritos_expander(db=None, user_id=None, current_page_path=None):
                     display_process_history(processo, db)
 
 
-def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
+def display_suspensos_expander(db=None, user_id=None, current_page_path=None, usuarios_cache=None):
     """
     Cria um expander com a lista de processos suspensos do usuário.
+    
+    Args:
+        usuarios_cache: Dict {user_id: user_dict} para evitar queries N+1
     """
+    from utils.common import batch_has_unread_comments
+    
     if 'history_visible_susp' not in st.session_state:
         st.session_state.history_visible_susp = {}
 
@@ -286,6 +306,10 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
         with st.expander("🚫 Processos Suspensos (0)", expanded=False):
             st.info("Não há processos suspensos no momento.")
         return
+
+    # Batch de comentários não lidos
+    susp_ids = [p.get('id') for p in suspensos]
+    unread_cache = batch_has_unread_comments(susp_ids, user_id) if susp_ids else {}
 
     with st.expander(f"🚫 Processos Suspensos ({len(suspensos)})", expanded=False):
         for processo in suspensos:
@@ -304,9 +328,15 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                 st.markdown(expander_label)
                 cor_status = get_status_color(status_geral)
                 
-                chefe = get_user_by_id(processo.get('id_chefe_gabinete'))
-                proc = get_user_by_id(processo.get('id_procurador'))
-                serv = get_user_by_id(processo.get('id_servidor_responsavel'))
+                # Usar cache se disponível, senão query individual
+                if usuarios_cache:
+                    chefe = usuarios_cache.get(processo.get('id_chefe_gabinete'))
+                    proc = usuarios_cache.get(processo.get('id_procurador'))
+                    serv = usuarios_cache.get(processo.get('id_servidor_responsavel'))
+                else:
+                    chefe = get_user_by_id(processo.get('id_chefe_gabinete'))
+                    proc = get_user_by_id(processo.get('id_procurador'))
+                    serv = get_user_by_id(processo.get('id_servidor_responsavel'))
                 
                 chefe_nome = chefe.get('nome_completo') if chefe else "N/A"
                 procurador_nome = proc.get('nome_completo') if proc else "N/A"
@@ -349,7 +379,8 @@ def display_suspensos_expander(db=None, user_id=None, current_page_path=None):
                             st.rerun()
 
                 with b2:
-                    tem_nao_lidos = has_unread_comments(pid, user_id)
+                    # Usar cache de unread
+                    tem_nao_lidos = unread_cache.get(pid, False)
                     lbl = "Comentário Não Lido" if tem_nao_lidos else "Comentários"
                     typ = "primary" if tem_nao_lidos else "secondary"
                     if st.button(lbl, key=f"susp_comments_{pid}", width='stretch', type=typ):
