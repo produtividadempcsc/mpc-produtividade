@@ -2,10 +2,7 @@
 from datetime import date, datetime, timedelta
 import pytz
 from supabase_client import supabase, QueryBuilder, select_all, update_by_id
-from db_compat import (
-    get_correct_product_type_version, get_product_type_by_id, 
-    calculate_due_date, is_business_day
-)
+from db_compat import calculate_due_date, is_business_day
 from utils.notifications import send_email_notification
 from utils.timezone import today_brazil, now_brazil
 
@@ -13,15 +10,60 @@ def update_process_statuses():
     """
     Analisa todos os processos para garantir a integridade dos prazos aplicados e, em seguida,
     atualiza os status dos processos que ainda estão ativos.
-    (Versão Supabase)
+    (Versão Supabase - OTIMIZADA com cache)
     """
     try:
         print(f"[{datetime.now()}] INICIANDO JOB de verificação de prazos e status (Supabase).")
         
+        # =======================================================================
+        # CACHE CENTRALIZADO - Carrega todos os dados necessários uma vez
+        # =======================================================================
+        todos_processos = select_all("processos")
+        todos_produtos = select_all("tipos_produto")
+        
+        # Cache de produtos por ID
+        produtos_por_id = {p['id']: p for p in todos_produtos}
+        
+        # Cache de produtos por nome (para get_correct_version)
+        # Agrupa por nome e ordena por data_validade
+        produtos_por_nome = {}
+        for p in todos_produtos:
+            nome = p.get('nome_produto')
+            if nome not in produtos_por_nome:
+                produtos_por_nome[nome] = []
+            produtos_por_nome[nome].append(p)
+        
+        # Ordena cada grupo por data_validade
+        for nome in produtos_por_nome:
+            produtos_por_nome[nome].sort(key=lambda x: x.get('data_validade', '9999-12-31'))
+        
+        def get_correct_version_cached(original_product_id: int, reference_date):
+            """Versão otimizada que usa cache em memória"""
+            if not original_product_id or not reference_date:
+                return None
+            
+            produto_original = produtos_por_id.get(original_product_id)
+            if not produto_original:
+                return None
+            
+            nome_produto = produto_original.get('nome_produto')
+            versoes = produtos_por_nome.get(nome_produto, [])
+            
+            if not versoes:
+                return None
+            
+            ref_date_str = reference_date.isoformat() if isinstance(reference_date, date) else reference_date
+            
+            # Buscar versão com data_validade >= reference_date
+            for v in versoes:
+                if v.get('data_validade', '9999-12-31') >= ref_date_str:
+                    return v
+            
+            # Fallback: retornar a versão mais recente
+            return versoes[-1] if versoes else None
+        
         # --- ETAPA 1: CORREÇÃO DE INTEGRIDADE DOS PRAZOS ---
         print(f"[{datetime.now()}] ETAPA 1: Verificando integridade dos prazos...")
-        
-        todos_processos = select_all("processos")
         prazo_updates_count = 0
 
         for p in todos_processos:
@@ -32,7 +74,7 @@ def update_process_statuses():
             if isinstance(dt_atrib, str):
                 dt_atrib = date.fromisoformat(dt_atrib)
 
-            produto_correto = get_correct_product_type_version(p['id_tipo_produto'], dt_atrib)
+            produto_correto = get_correct_version_cached(p['id_tipo_produto'], dt_atrib)
             if not produto_correto:
                 continue
 
@@ -66,7 +108,8 @@ def update_process_statuses():
         ]
         
         for p in processos_servidor_ativos:
-            produto_obj = get_product_type_by_id(p['id_tipo_produto'])
+            # Usando cache em vez de query
+            produto_obj = produtos_por_id.get(p['id_tipo_produto'])
             if not produto_obj: continue
             
             dt_atrib = p.get('data_atribuicao_servidor')
@@ -109,7 +152,8 @@ def update_process_statuses():
         ]
 
         for p in processos_chefe_ativos:
-            produto_obj = get_product_type_by_id(p['id_tipo_produto'])
+            # Usando cache em vez de query
+            produto_obj = produtos_por_id.get(p['id_tipo_produto'])
             if not produto_obj: continue
             
             dt_conclusao = p.get('data_conclusao_servidor')
