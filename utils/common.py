@@ -1,8 +1,8 @@
 
 import re
 import unicodedata
-from datetime import date, datetime
-from typing import List, Dict, Any, Callable
+from datetime import date, datetime, timedelta
+from typing import List, Dict, Any, Callable, Tuple, Optional
 from thefuzz import fuzz
 from supabase_client import QueryBuilder, insert, select_all
 from db_compat import (
@@ -12,7 +12,49 @@ from db_compat import (
 # Importar funções de timezone do módulo separado (sem dependências circulares)
 from utils.timezone import now_brazil, today_brazil, BRAZIL_TZ
 
-# --- FUNÇÕES DE TEXTO E NORMALIZAÇÃO ---
+
+# --- FUNÇÕES DE STATUS MPC ---
+
+def get_mpc_status(processo: dict) -> Tuple[str, Optional[int]]:
+    """
+    Calcula status MPC e dias restantes.
+    
+    Args:
+        processo: Dicionário com dados do processo
+        
+    Returns:
+        Tuple (status_mpc, dias_restantes)
+        - status_mpc: "No prazo MPC", "Atrasado MPC", "Finalizado MPC", ou "Não se aplica"
+        - dias_restantes: positivo = faltam X dias, negativo = vencido há X dias, None = não se aplica
+    """
+    # Se já está finalizado, não calcula mais
+    if processo.get('status_chefe') == "Finalizado":
+        return ("Finalizado MPC", None)
+    
+    data_entrada_mpc = processo.get('data_entrada_mpc')
+    prazo_mpc_dias = processo.get('prazo_mpc_dias')
+    
+    # Não tem prazo MPC definido -> implicitamente "Não se aplica"
+    if not data_entrada_mpc or not prazo_mpc_dias:
+        return ("Não se aplica", None)
+    
+    # Parse date if string
+    if isinstance(data_entrada_mpc, str):
+        data_entrada_mpc = date.fromisoformat(data_entrada_mpc)
+    
+    # Calcula data limite (dias CORRIDOS)
+    data_limite_mpc = data_entrada_mpc + timedelta(days=prazo_mpc_dias)
+    
+    # Dias restantes
+    dias_restantes = (data_limite_mpc - today_brazil()).days
+    
+    if dias_restantes >= 0:
+        return ("No prazo MPC", dias_restantes)
+    else:
+        return ("Atrasado MPC", dias_restantes)
+
+
+
 
 def normalize_process_number(s: str) -> str:
     """Normaliza o número do processo para comparação, removendo espaços e caracteres especiais."""
