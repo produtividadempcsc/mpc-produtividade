@@ -158,8 +158,29 @@ def display_edit_processo_form(processo_id):
         with col3_check:
             ignorar_analise_procurador = st.checkbox("Ignorar etapa de Análise (Procurador)", value=processo.get('ignorar_analise_procurador', False))
 
+        # Campos de Prazo MPC
+        st.markdown("---")
+        st.subheader("📆 Prazo do Setor MPC")
+        dt_entrada_mpc_val = parse_date_val(processo.get('data_entrada_mpc'))
+        col_mpc1, col_mpc2 = st.columns(2)
+        with col_mpc1:
+            data_entrada_mpc = st.date_input(
+                "Data de Entrada no MPC", 
+                value=dt_entrada_mpc_val, 
+                format="DD/MM/YYYY",
+                help="Data em que o processo chegou ao MPC. Deixe vazio se não se aplica."
+            )
+        with col_mpc2:
+            prazo_mpc_dias = st.number_input(
+                "Prazo MPC (dias corridos)", 
+                min_value=0, 
+                value=processo.get('prazo_mpc_dias') or 0,
+                help="Prazo total em dias corridos para o processo ser finalizado pelo setor MPC. 0 = Não se aplica."
+            )
+
         salvar_btn = st.form_submit_button("Salvar Alterações")
         cancelar_btn = st.form_submit_button("Cancelar Edição")
+
 
         if salvar_btn:
             updates = {}
@@ -180,6 +201,20 @@ def display_edit_processo_form(processo_id):
             updates['ignorar_revisao_chefe'] = ignorar_revisao_chefe
             updates['ignorar_analise_procurador'] = ignorar_analise_procurador
             
+            # Campos de Prazo MPC
+            updates['data_entrada_mpc'] = data_entrada_mpc.isoformat() if data_entrada_mpc else None
+            updates['prazo_mpc_dias'] = prazo_mpc_dias if prazo_mpc_dias > 0 else None
+            # Calcular status_mpc baseado nos novos valores
+            if not data_entrada_mpc or prazo_mpc_dias == 0:
+                updates['status_mpc'] = "Não se aplica"
+            else:
+                from utils.common import get_mpc_status
+                temp_proc = processo.copy()
+                temp_proc['data_entrada_mpc'] = data_entrada_mpc
+                temp_proc['prazo_mpc_dias'] = prazo_mpc_dias
+                new_status_mpc, _ = get_mpc_status(temp_proc)
+                updates['status_mpc'] = new_status_mpc
+            
             updates['data_atribuicao_servidor'] = data_atribuicao.isoformat() if data_atribuicao else None
             
             produto_selecionado = get_product_type_by_id(selected_prod_id)
@@ -192,6 +227,7 @@ def display_edit_processo_form(processo_id):
                 updates['data_conclusao_chefe'] = data_conclusao_chefe.isoformat() if data_conclusao_chefe else None
             
             was_finalizado = status_chefe == "Finalizado"
+
             old_data_servidor = dt_conc_serv_val
             old_data_chefe = dt_conc_chefe_val
             
