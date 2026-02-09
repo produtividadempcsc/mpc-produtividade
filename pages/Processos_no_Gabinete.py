@@ -991,28 +991,58 @@ else:
                          </div>
                          """, unsafe_allow_html=True)
                          
-                         # Mostrar informações de suspensão/afastamento se houver dias suspensos
-                         if item.get('dias_suspensos', 0) > 0:
-                             st.markdown(f"""
-                             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; border-radius: 4px;">
-                                 <strong>⏸️ Prazo Suspenso:</strong> {item['dias_suspensos']} dia(s) adicionado(s) ao prazo devido a afastamentos/suspensões.
-                             </div>
-                             """, unsafe_allow_html=True)
+                         # Mostrar informações de afastamentos que afetam o período do processo
+                         # Buscar afastamentos do servidor que se sobrepõem com o período do processo
+                         if item.get('data_atribuicao') and item.get('id_servidor'):
+                             # Usar data_final ou data de hoje como referência
+                             data_fim_busca = item.get('data_final') or date.today()
+                             afastamentos = get_leaves_overlapping(
+                                 item['id_servidor'],
+                                 item['data_atribuicao'],
+                                 data_fim_busca
+                             )
                              
-                             # Buscar afastamentos do servidor que afetam o período do processo
-                             if item.get('data_atribuicao') and item.get('data_final') and item.get('id_servidor'):
-                                 afastamentos = get_leaves_overlapping(
-                                     item['id_servidor'],
-                                     item['data_atribuicao'],
-                                     item['data_final']
-                                 )
+                             # Se há dias suspensos registrados ou afastamentos encontrados
+                             dias_susp = item.get('dias_suspensos', 0) or 0
+                             if afastamentos or dias_susp > 0:
+                                 # Calcular total de dias de afastamento no período
+                                 total_dias_af = 0
+                                 for af in afastamentos:
+                                     af_ini = af.get('data_inicio')
+                                     af_fim = af.get('data_fim')
+                                     if af_ini and af_fim:
+                                         if isinstance(af_ini, str): af_ini = date.fromisoformat(af_ini[:10])
+                                         if isinstance(af_fim, str): af_fim = date.fromisoformat(af_fim[:10])
+                                         # Calcular sobreposição
+                                         overlap_start = max(item['data_atribuicao'], af_ini)
+                                         overlap_end = min(data_fim_busca, af_fim)
+                                         if overlap_start <= overlap_end:
+                                             total_dias_af += (overlap_end - overlap_start).days + 1
+                                 
+                                 # Box de aviso
+                                 dias_total = max(dias_susp, total_dias_af)
+                                 if dias_total > 0:
+                                     st.markdown(f"""
+                                     <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                                         <strong>⏸️ Prazo Afetado:</strong> {dias_total} dia(s) de afastamento no período, o prazo foi ajustado automaticamente.
+                                     </div>
+                                     """, unsafe_allow_html=True)
+                                 
+                                 # Listar os afastamentos
                                  if afastamentos:
-                                     st.markdown("<small><strong>📅 Afastamentos no período:</strong></small>", unsafe_allow_html=True)
+                                     st.markdown("<small><strong>📅 Afastamentos do servidor no período:</strong></small>", unsafe_allow_html=True)
                                      for af in afastamentos:
                                          dt_ini = af.get('data_inicio', '')[:10] if af.get('data_inicio') else '-'
                                          dt_fim = af.get('data_fim', '')[:10] if af.get('data_fim') else '-'
+                                         # Formatar data para pt-BR
+                                         try:
+                                             dt_ini_fmt = date.fromisoformat(dt_ini).strftime('%d/%m/%Y')
+                                             dt_fim_fmt = date.fromisoformat(dt_fim).strftime('%d/%m/%Y')
+                                         except:
+                                             dt_ini_fmt = dt_ini
+                                             dt_fim_fmt = dt_fim
                                          descr = af.get('descricao', 'Sem descrição')
-                                         st.markdown(f"<small style='color:#666;'>• {dt_ini} a {dt_fim}: {descr}</small>", unsafe_allow_html=True)
+                                         st.markdown(f"<small style='color:#666;'>• {dt_ini_fmt} a {dt_fim_fmt}: {descr}</small>", unsafe_allow_html=True)
                          
                          # Actions
                          act_c1, act_c2, act_c3, act_c4 = st.columns(4)
