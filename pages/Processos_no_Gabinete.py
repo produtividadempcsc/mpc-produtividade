@@ -576,6 +576,10 @@ else:
             
             total_com_procurador = len([p for p in all_processos_chefe 
                                         if p.get('status_chefe') == "Processo com o Procurador"])
+            
+            # KPI: Processos atrasados MPC
+            total_atrasados_mpc = len([p for p in all_processos_chefe 
+                                       if p.get('status_mpc') == 'Atrasado MPC'])
 
         # KPIs com estilo personalizado
         st.markdown(f"""
@@ -592,8 +596,17 @@ else:
                 <div class="kpi-value" style="color: #17a2b8;">{total_com_procurador}</div>
                 <div class="kpi-label">Processos com o Procurador</div>
             </div>
+            <div class="kpi-card">
+                <div class="kpi-value" style="color: {'#DC3545' if total_atrasados_mpc > 0 else '#28A745'};">{total_atrasados_mpc}</div>
+                <div class="kpi-label">Atrasados MPC</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Alerta para processos com prazo MPC vencido
+        if total_atrasados_mpc > 0:
+            st.error(f"⚠️ **ATENÇÃO:** {total_atrasados_mpc} processo(s) com prazo MPC vencido!")
+
 
         chefe_logado = get_user_by_id(id_chefe_para_acoes)
         
@@ -655,7 +668,26 @@ else:
                 with col3_check:
                     ignorar_analise_procurador = st.checkbox("⏩ Ignorar etapa de Análise (Procurador)", help="Se marcado, o sistema deve automaticamente pular essa etapa e encaminhar o processo para a próxima fase do fluxo.")
                 
+                st.markdown("---")
+                st.markdown("**📆 Prazo do Setor MPC (Opcional):**")
+                col_mpc1, col_mpc2 = st.columns(2)
+                with col_mpc1:
+                    data_entrada_mpc = st.date_input(
+                        "Data de Entrada no MPC", 
+                        value=None, 
+                        format="DD/MM/YYYY",
+                        help="Data em que o processo chegou ao MPC. Deixe vazio se não se aplica."
+                    )
+                with col_mpc2:
+                    prazo_mpc_dias = st.number_input(
+                        "Prazo MPC (dias corridos)", 
+                        min_value=0, 
+                        value=0,
+                        help="Prazo total em dias corridos para o processo ser finalizado pelo setor MPC. 0 = Não se aplica."
+                    )
+                
                 submitted = st.form_submit_button("✅ Criar e Atribuir Processo", disabled=(not servidores_dict or not procuradores_dict), type="primary")
+
                 
                 if submitted and all([processo_numero, id_tipo_produto_nome, id_servidor_nome, id_procurador_nome]):
                     # Fetch correct product version (simplified: get by name and taking latest version logic)
@@ -681,8 +713,13 @@ else:
                         "ignorar_revisao_chefe": ignorar_revisao_chefe,
                         "ignorar_analise_procurador": ignorar_analise_procurador,
                         "prioridade": prioridade,
-                        "observacao_chefe": observacao_chefe
+                        "observacao_chefe": observacao_chefe,
+                        # Campos de Prazo MPC
+                        "data_entrada_mpc": data_entrada_mpc.isoformat() if data_entrada_mpc else None,
+                        "prazo_mpc_dias": prazo_mpc_dias if prazo_mpc_dias > 0 else None,
+                        "status_mpc": "Não se aplica" if not data_entrada_mpc or prazo_mpc_dias == 0 else "No prazo MPC"
                     }
+
                     
                     res_proc = insert("processos", novo_processo_data)
                     # insert() returns the inserted dict directly, or None on error
@@ -790,8 +827,13 @@ else:
         with filtros_col4:
             ordenar_por = st.selectbox("📈 Ordenar por", ["Mais Recentes", "Mais Antigos", "Prazo Restante (Crescente)", "Prazo Restante (Decrescente)"], key="chefe_ordenar")
             items_per_page = st.selectbox("📄 Itens por página", [10, 25, 50, 100], index=1, key="chefe_items_per_page")
+        
+        # Filtro de Status MPC (nova linha)
+        opcoes_status_mpc = ["No prazo MPC", "Atrasado MPC", "Não se aplica"]
+        filtro_status_mpc = st.multiselect("📆 Status MPC", options=opcoes_status_mpc, default=st.session_state.get('chefe_filtro_status_mpc', []))
 
         st.markdown('</div>', unsafe_allow_html=True)
+
 
         # Legenda de ícones
         st.markdown("""
@@ -847,6 +889,11 @@ else:
                     items=processos_filtrados,
                     key_func=lambda p: p.get('processo_numero', '')
                 )
+            
+            # Filtro de Status MPC
+            if filtro_status_mpc:
+                processos_filtrados = [p for p in processos_filtrados if p.get('status_mpc') in filtro_status_mpc]
+
 
             # --- PRÉ-CÁLCULO DOS DADOS ---
             hoje = date.today()
@@ -884,6 +931,9 @@ else:
                     "numero": p.get('processo_numero'),
                     "status_servidor": p.get('status_servidor'),
                     "status_chefe": p.get('status_chefe'),
+                    "status_mpc": p.get('status_mpc', 'Não se aplica'),
+                    "prazo_mpc_dias": p.get('prazo_mpc_dias'),
+                    "data_entrada_mpc": date.fromisoformat(p['data_entrada_mpc']) if p.get('data_entrada_mpc') else None,
                     "prioridade": p.get('prioridade'),
                     "data_atribuicao": date.fromisoformat(p['data_atribuicao_servidor']) if p.get('data_atribuicao_servidor') else None,
                     "nome_produto": produto_obj.get('nome_produto'),
@@ -897,6 +947,7 @@ else:
                     "dias_suspensos": p.get('prazo_total_dias_suspenso', 0),
                     "id_servidor": p.get('id_servidor_responsavel')
                 }
+
                 
                 # Prazo calc
                 if p.get('nao_se_aplica_prazo_servidor'):
@@ -967,6 +1018,22 @@ else:
                      status_display = item['status_chefe'] if item['status_chefe'] != "Aguardando Análise" and item['status_chefe'] != "Revisão Atrasada" else item['status_servidor']
                      status_class = f"status-{status_display.lower().replace(' ', '-')}"
                      
+                     # MPC Status Badge
+                     mpc_badge = ""
+                     if item['status_mpc'] and item['status_mpc'] != "Não se aplica":
+                         mpc_status = item['status_mpc']
+                         # Calculate remaining days for MPC
+                         if item.get('data_entrada_mpc') and item.get('prazo_mpc_dias'):
+                             from datetime import timedelta
+                             data_limite_mpc = item['data_entrada_mpc'] + timedelta(days=item['prazo_mpc_dias'])
+                             dias_restantes_mpc = (data_limite_mpc - hoje).days
+                             if mpc_status == "No prazo MPC":
+                                 mpc_badge = f'<div class="process-status" style="background-color: #28A745; color: white; margin-left: 5px;">{mpc_status} ({dias_restantes_mpc} dias)</div>'
+                             elif mpc_status == "Atrasado MPC":
+                                 mpc_badge = f'<div class="process-status" style="background-color: #DC3545; color: white; margin-left: 5px;">{mpc_status} ({abs(dias_restantes_mpc)} dias)</div>'
+                             else:
+                                 mpc_badge = f'<div class="process-status" style="background-color: #6c757d; color: white; margin-left: 5px; opacity: 0.7;">{mpc_status}</div>'
+                     
                      # Header
                      st.markdown(f"""
                      <div class="process-header">
@@ -974,11 +1041,13 @@ else:
                             <div class="priority-icons">{icons_html}</div>
                             <div class="process-number">{item['numero']}</div>
                             <div class="process-status {status_class}">{status_display}</div>
+                            {mpc_badge}
                             <div>Servidor: {item['servidor_nome']}</div>
                             <div>{f"Prazo: {item['prazo_restante']} dias (vence {item['data_final'].strftime('%d/%m/%Y')})" if item['prazo_restante'] != float('inf') and item.get('data_final') else ""}</div>
                         </div>
                      </div>
                      """, unsafe_allow_html=True)
+
                      
                      with st.expander("📋 Ver detalhes e ações"):
                          st.markdown('<div class="process-content">', unsafe_allow_html=True)
