@@ -34,6 +34,7 @@ from db_compat import (
     is_process_favorite,
     toggle_process_favorite
 )
+from repositories.afastamento_repository import get_leaves_overlapping
 
 auth.auth_guard()
 
@@ -892,7 +893,9 @@ else:
                     "procurador_nome": usuarios_cache.get(p.get('id_procurador'), {}).get('nome_completo', 'N/A'),
                     "possui_anexo": p_id in anexos_cache,
                     "is_favorito": p_id in favoritos_cache,
-                    "tem_nao_lidos": unread_comments_cache.get(p_id, False)  # Uses batch cache
+                    "tem_nao_lidos": unread_comments_cache.get(p_id, False),  # Uses batch cache
+                    "dias_suspensos": p.get('prazo_total_dias_suspenso', 0),
+                    "id_servidor": p.get('id_servidor_responsavel')
                 }
                 
                 # Prazo calc
@@ -987,6 +990,29 @@ else:
                             <div class="detail-item"><div class="detail-label">Procurador</div><div class="detail-value">{item['procurador_nome']}</div></div>
                          </div>
                          """, unsafe_allow_html=True)
+                         
+                         # Mostrar informações de suspensão/afastamento se houver dias suspensos
+                         if item.get('dias_suspensos', 0) > 0:
+                             st.markdown(f"""
+                             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                                 <strong>⏸️ Prazo Suspenso:</strong> {item['dias_suspensos']} dia(s) adicionado(s) ao prazo devido a afastamentos/suspensões.
+                             </div>
+                             """, unsafe_allow_html=True)
+                             
+                             # Buscar afastamentos do servidor que afetam o período do processo
+                             if item.get('data_atribuicao') and item.get('data_final') and item.get('id_servidor'):
+                                 afastamentos = get_leaves_overlapping(
+                                     item['id_servidor'],
+                                     item['data_atribuicao'],
+                                     item['data_final']
+                                 )
+                                 if afastamentos:
+                                     st.markdown("<small><strong>📅 Afastamentos no período:</strong></small>", unsafe_allow_html=True)
+                                     for af in afastamentos:
+                                         dt_ini = af.get('data_inicio', '')[:10] if af.get('data_inicio') else '-'
+                                         dt_fim = af.get('data_fim', '')[:10] if af.get('data_fim') else '-'
+                                         descr = af.get('descricao', 'Sem descrição')
+                                         st.markdown(f"<small style='color:#666;'>• {dt_ini} a {dt_fim}: {descr}</small>", unsafe_allow_html=True)
                          
                          # Actions
                          act_c1, act_c2, act_c3, act_c4 = st.columns(4)
