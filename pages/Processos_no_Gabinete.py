@@ -822,7 +822,7 @@ else:
                     qb.in_list("id_servidor_responsavel", ids_flat)
             
             if filtro_procurador_nomes:
-                 ids = [procuradores_dict2[n] for n in filtro_procurador_nomes]
+                 ids = [procuradores_dict[n] for n in filtro_procurador_nomes]
                  qb.in_list("id_procurador", ids)
             
             if filtro_tipo_produto_nomes:
