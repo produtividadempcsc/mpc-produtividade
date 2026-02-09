@@ -811,16 +811,8 @@ else:
         with st.spinner("🔄 Carregando processos..."):
             qb = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe_para_acoes)
             
-            if filtro_status: 
-                qb.or_filter(f"status_servidor.in.({','.join(filtro_status)}),status_chefe.in.({','.join(filtro_status)})") 
-                # Note: complex OR logic with QueryBuilder might require logic check.
-                # If Supabase client supports `.or_`, we use it. If not, filtering in Python might be safer for complex ORs unless I built `or_` support.
-                # Checking `supabase_client.py` capabilities in memory... 
-                # I implemented simple EQ/In/etc. I didn't verify strictly sophisticated OR.
-                # Fallback: Query all for this chief (usually manageable size) and filter in Python for complex status OR logic 
-                # OR execute separate queries and merge. 
-                # Let's try to filter in Python for the status OR logic to be safe and accurate.
-                pass 
+            # Note: complex OR logic (status_servidor OR status_chefe) is handled in Python below (lines 846-849)
+            # The QueryBuilder doesn't support or_filter, so we fetch all and filter in Python
             
             if filtro_servidor:
                 # Need IDs
@@ -980,7 +972,7 @@ else:
                             <div class="process-number">{item['numero']}</div>
                             <div class="process-status {status_class}">{status_display}</div>
                             <div>Servidor: {item['servidor_nome']}</div>
-                            <div>{f"Prazo: {item['prazo_restante']} dias" if item['prazo_restante'] != float('inf') else ""}</div>
+                            <div>{f"Prazo: {item['prazo_restante']} dias (vence {item['data_final'].strftime('%d/%m/%Y')})" if item['prazo_restante'] != float('inf') and item.get('data_final') else ""}</div>
                         </div>
                      </div>
                      """, unsafe_allow_html=True)
