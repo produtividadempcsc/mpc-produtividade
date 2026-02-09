@@ -48,15 +48,15 @@ def start_background_worker():
     )
     logger.info("Job 'notification_job' agendado (cron=08:00).")
 
-    # 3. Backup Automático - A cada 24 horas
+    # 3. Backup Automático - A cada 1 hora (verifica se já passou 24h do último)
     scheduler.add_job(
         backup.executar_backup_automatico_e_enviar_email, 
         trigger='interval', 
-        hours=24, 
+        hours=1, 
         id='auto_backup_job', 
         replace_existing=True
     )
-    logger.info("Job 'auto_backup_job' agendado (interval=6h).")
+    logger.info("Job 'auto_backup_job' agendado (interval=1h).")
 
     # --- INICIANDO ---
     try:
