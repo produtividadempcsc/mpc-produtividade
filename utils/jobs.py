@@ -5,6 +5,8 @@ from supabase_client import supabase, QueryBuilder, select_all, update_by_id
 from db_compat import calculate_due_date, is_business_day
 from utils.notifications import send_email_notification
 from utils.timezone import today_brazil, now_brazil
+from utils.common import get_mpc_status
+
 
 def update_process_statuses():
     """
@@ -189,10 +191,33 @@ def update_process_statuses():
                 update_by_id("processos", p['id'], updates)
                 print(f"[{datetime.now()}] STATUS UPDATE (Chefe): Processo {p['id']} -> {updates}")
 
-        print(f"[{datetime.now()}] JOB FINALIZADO. Total Updates: {status_updates_count}")
+        # Sub-etapa 2.3: Status MPC
+        print(f"[{datetime.now()}] Sub-etapa 2.3: Atualizando status MPC...")
+        mpc_updates_count = 0
+        
+        # Filtrar processos que podem ter prazo MPC (não finalizados)
+        processos_mpc = [
+            p for p in todos_processos
+            if p.get('status_chefe') != "Finalizado" and p.get('data_entrada_mpc') and p.get('prazo_mpc_dias')
+        ]
+        
+        for p in processos_mpc:
+            status_mpc_atual = p.get('status_mpc')
+            novo_status_mpc, _ = get_mpc_status(p)
+            
+            if status_mpc_atual != novo_status_mpc:
+                update_by_id("processos", p['id'], {'status_mpc': novo_status_mpc})
+                print(f"[{datetime.now()}] STATUS UPDATE (MPC): Processo {p['id']} -> {novo_status_mpc}")
+                mpc_updates_count += 1
+        
+        if mpc_updates_count > 0:
+            print(f"[{datetime.now()}] Sub-etapa 2.3: {mpc_updates_count} status MPC atualizados.")
+
+        print(f"[{datetime.now()}] JOB FINALIZADO. Total Updates: {status_updates_count + mpc_updates_count}")
 
     except Exception as e:
         print(f"[{datetime.now()}] ERRO NO JOB: {e}")
+
 
 def initialize_restored_data():
     """
