@@ -228,12 +228,53 @@ def display_edit_processo_form(processo_id):
                         updates['status_chefe'] = None
 
             new_dc_chefe = data_conclusao_chefe
+            new_dc_serv = data_conclusao_servidor
+            
+            # --- ATUALIZAÇÃO DE STATUS BASEADA NAS DATAS (sem ser finalização) ---
+            # Isso garante que o processo se mova entre as páginas corretamente
+            if not finalizar_processo_check and not was_finalizado:
+                # Caso 1: Data de revisão do chefe foi preenchida
+                if new_dc_chefe and not old_data_chefe:
+                    # Chefe revisou -> vai para o procurador
+                    updates['status_servidor'] = "Concluído"
+                    updates['status_chefe'] = "Processo com o Procurador"
+                # Caso 2: Data de conclusão do servidor foi preenchida (but without chefe review)
+                elif new_dc_serv and not old_data_servidor and not new_dc_chefe:
+                    # Servidor concluiu -> vai para revisão do chefe
+                    updates['status_servidor'] = "Concluído"
+                    updates['status_chefe'] = "Aguardando Análise"
+                # Caso 3: Data de revisão do chefe foi removida
+                elif old_data_chefe and not new_dc_chefe:
+                    if new_dc_serv:
+                        # Se ainda tem conclusão do servidor, volta para revisão
+                        updates['status_servidor'] = "Concluído"
+                        updates['status_chefe'] = "Aguardando Análise"
+                    else:
+                        # Se não tem nenhuma data, recalcula status do servidor
+                        temp_proc = processo.copy()
+                        temp_proc.update(updates)
+                        temp_proc['data_conclusao_servidor'] = None
+                        temp_proc['data_conclusao_chefe'] = None
+                        temp_proc['data_atribuicao_servidor'] = data_atribuicao.isoformat() if data_atribuicao else None
+                        updates['status_servidor'] = get_servidor_status(temp_proc)
+                        updates['status_chefe'] = "Aguardando Análise"
+                # Caso 4: Data de conclusão do servidor foi removida
+                elif old_data_servidor and not new_dc_serv:
+                    # Volta para o servidor trabalhar
+                    temp_proc = processo.copy()
+                    temp_proc.update(updates)
+                    temp_proc['data_conclusao_servidor'] = None
+                    temp_proc['data_conclusao_chefe'] = None
+                    temp_proc['data_atribuicao_servidor'] = data_atribuicao.isoformat() if data_atribuicao else None
+                    updates['status_servidor'] = get_servidor_status(temp_proc)
+                    updates['status_chefe'] = "Aguardando Análise"
+            
+            # --- HISTÓRICO DE ALTERAÇÕES DE DATA ---
             if old_data_chefe and not new_dc_chefe:
                 add_process_history(pid, "Data de revisão do chefe removida", st.session_state.active_user_id)
             elif not old_data_chefe and new_dc_chefe:
                 add_process_history(pid, "Data de revisão do chefe registrada", st.session_state.active_user_id)
             
-            new_dc_serv = data_conclusao_servidor
             if old_data_servidor and not new_dc_serv:
                 add_process_history(pid, "Data de conclusão do servidor removida", st.session_state.active_user_id)
             elif not old_data_servidor and new_dc_serv:
