@@ -284,7 +284,7 @@ st.markdown("""
 
     /* Conteúdo do processo */
     .process-content {
-        padding: 20px 25px;
+        padding: 10px 10px;
         font-family: inherit;
     }
 
@@ -373,7 +373,7 @@ st.markdown("""
 
     /* Botões de ação (estilizar botões Streamlit dentro do expander) */
     .stExpander [data-testid="stVerticalBlock"] button {
-        padding: 10px 24px !important;
+        padding: 10px 100px !important;
         font-size: 0.95em !important;
         font-weight: 600 !important;
         border-radius: 8px !important;
