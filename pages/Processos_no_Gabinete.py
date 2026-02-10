@@ -284,34 +284,76 @@ st.markdown("""
 
     /* Conteúdo do processo */
     .process-content {
-        padding: 25px;
+        padding: 20px 25px;
+        font-family: inherit;
     }
 
     .process-details {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
         margin-bottom: 20px;
+        padding: 18px;
+        background: #FAFAFA;
+        border-radius: 10px;
+        border: 1px solid #EBEBEB;
     }
 
     .detail-item {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 6px;
     }
 
     .detail-label {
-        font-size: 0.85em;
-        color: #666;
+        font-size: 0.78em;
+        color: var(--primary-color);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
+        letter-spacing: 0.8px;
+        font-weight: 700;
     }
 
     .detail-value {
-        font-size: 1em;
-        color: var(--text-color);
+        font-size: 0.95em;
+        color: #333;
         font-weight: 500;
+    }
+
+    /* Card de Afastamento/Suspensão */
+    .suspension-card {
+        background: #FFF8E1;
+        border-left: 4px solid #FFC107;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin: 15px 0;
+    }
+
+    .suspension-title {
+        font-size: 0.92em;
+        font-weight: 600;
+        color: #856404;
+        margin-bottom: 6px;
+    }
+
+    .suspension-detail {
+        font-size: 0.85em;
+        color: #666;
+        margin-bottom: 2px;
+    }
+
+    .leaves-header {
+        font-size: 0.85em;
+        font-weight: 600;
+        color: #555;
+        margin: 10px 0 6px 0;
+    }
+
+    .leave-item {
+        font-size: 0.85em;
+        color: #666;
+        padding: 4px 0 4px 12px;
+        border-left: 2px solid #DDD;
+        margin-bottom: 4px;
     }
 
     /* Observações */
@@ -329,7 +371,26 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* Botões de ação */
+    /* Botões de ação (estilizar botões Streamlit dentro do expander) */
+    .stExpander [data-testid="stVerticalBlock"] button {
+        padding: 10px 24px !important;
+        font-size: 0.95em !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: 2px solid var(--primary-color) !important;
+        color: var(--primary-color) !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+    }
+
+    .stExpander [data-testid="stVerticalBlock"] button:hover {
+        background: var(--primary-color) !important;
+        color: white !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(158, 5, 32, 0.3) !important;
+    }
+
     .action-buttons {
         display: flex;
         gap: 10px;
@@ -1111,30 +1172,33 @@ else:
                                          if overlap_start <= overlap_end:
                                              total_dias_af += (overlap_end - overlap_start).days + 1
                                  
-                                 # Box de aviso
+                                 # Box de aviso unificado
                                  dias_total = max(dias_susp, total_dias_af)
                                  if dias_total > 0:
+                                     # Construir lista de afastamentos dentro do mesmo card
+                                     leaves_html = ""
+                                     if afastamentos:
+                                         leaves_items = ""
+                                         for af in afastamentos:
+                                             dt_ini = af.get('data_inicio', '')[:10] if af.get('data_inicio') else '-'
+                                             dt_fim = af.get('data_fim', '')[:10] if af.get('data_fim') else '-'
+                                             try:
+                                                 dt_ini_fmt = date.fromisoformat(dt_ini).strftime('%d/%m/%Y')
+                                                 dt_fim_fmt = date.fromisoformat(dt_fim).strftime('%d/%m/%Y')
+                                             except:
+                                                 dt_ini_fmt = dt_ini
+                                                 dt_fim_fmt = dt_fim
+                                             descr = af.get('descricao', 'Sem descrição')
+                                             leaves_items += f'<div class="leave-item">{dt_ini_fmt} a {dt_fim_fmt} — {descr}</div>'
+                                         leaves_html = f'<div class="leaves-header">📅 Afastamentos no período:</div>{leaves_items}'
+                                     
                                      st.markdown(f"""
-                                     <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; border-radius: 4px;">
-                                         <strong>⏸️ Prazo Afetado:</strong> {dias_total} dia(s) de afastamento no período, o prazo foi ajustado automaticamente.
+                                     <div class="suspension-card">
+                                         <div class="suspension-title">⏸️ Prazo Afetado</div>
+                                         <div class="suspension-detail">{dias_total} dia(s) de afastamento no período — prazo ajustado automaticamente.</div>
+                                         {leaves_html}
                                      </div>
                                      """, unsafe_allow_html=True)
-                                 
-                                 # Listar os afastamentos
-                                 if afastamentos:
-                                     st.markdown("<small><strong>📅 Afastamentos do servidor no período:</strong></small>", unsafe_allow_html=True)
-                                     for af in afastamentos:
-                                         dt_ini = af.get('data_inicio', '')[:10] if af.get('data_inicio') else '-'
-                                         dt_fim = af.get('data_fim', '')[:10] if af.get('data_fim') else '-'
-                                         # Formatar data para pt-BR
-                                         try:
-                                             dt_ini_fmt = date.fromisoformat(dt_ini).strftime('%d/%m/%Y')
-                                             dt_fim_fmt = date.fromisoformat(dt_fim).strftime('%d/%m/%Y')
-                                         except:
-                                             dt_ini_fmt = dt_ini
-                                             dt_fim_fmt = dt_fim
-                                         descr = af.get('descricao', 'Sem descrição')
-                                         st.markdown(f"<small style='color:#666;'>• {dt_ini_fmt} a {dt_fim_fmt}: {descr}</small>", unsafe_allow_html=True)
                          
                          # Actions
                          act_c1, act_c2, act_c3 = st.columns(3)
