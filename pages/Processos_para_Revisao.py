@@ -250,33 +250,38 @@ st.markdown("""
 
     /* Conteúdo do processo */
     .process-content {
-        padding: 25px;
+        padding: 10px 10px;
+        font-family: inherit;
     }
 
     .process-details {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
         margin-bottom: 20px;
+        padding: 18px;
+        background: #FAFAFA;
+        border-radius: 10px;
+        border: 1px solid #EBEBEB;
     }
 
     .detail-item {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 6px;
     }
 
     .detail-label {
-        font-size: 0.85em;
-        color: #666;
+        font-size: 0.78em;
+        color: var(--primary-color);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
+        letter-spacing: 0.8px;
+        font-weight: 700;
     }
 
     .detail-value {
-        font-size: 1em;
-        color: var(--text-color);
+        font-size: 0.95em;
+        color: #333;
         font-weight: 500;
     }
 
@@ -295,7 +300,26 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* Botões de ação */
+    /* Botões de ação (estilizar botões Streamlit dentro do expander) */
+    .stExpander [data-testid="stVerticalBlock"] button {
+        padding: 10px 100px !important;
+        font-size: 0.95em !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: 2px solid var(--primary-color) !important;
+        color: var(--primary-color) !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+    }
+
+    .stExpander [data-testid="stVerticalBlock"] button:hover {
+        background: var(--primary-color) !important;
+        color: white !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(158, 5, 32, 0.3) !important;
+    }
+
     .action-buttons {
         display: flex;
         gap: 10px;
@@ -532,7 +556,6 @@ else:
             <div class="legend-items">
                 <div class="legend-item"><span>💬</span> Comentários não lidos</div>
                 <div class="legend-item"><span>📎</span> Possui anexos</div>
-
                 <div class="legend-item"><span>📖</span> Descrição disponível</div>
                 <div class="legend-item"><span>📄</span> Modelo disponível</div>
                 <div class="legend-item"><span>🔥</span> Urgente</div>
