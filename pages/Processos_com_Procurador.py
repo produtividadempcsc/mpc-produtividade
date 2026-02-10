@@ -8,12 +8,8 @@ from sidebar import build_sidebar
 import utils.ui as ui_utils
 import utils.common as common_utils
 import relatorios
-# Módulos do projeto
-import utils.ui as ui_utils
-import utils.common as common_utils
-import relatorios
 from supabase_client import select_all, QueryBuilder, insert, delete_by_id, update_by_id
-from db_compat import get_user_by_id, toggle_process_favorite, is_process_favorite
+from db_compat import get_user_by_id
 
 import auth
 auth.auth_guard()
@@ -257,33 +253,38 @@ st.markdown("""
 
     /* Conteúdo do processo */
     .process-content {
-        padding: 25px;
+        padding: 10px 10px;
+        font-family: inherit;
     }
 
     .process-details {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
         margin-bottom: 20px;
+        padding: 18px;
+        background: #FAFAFA;
+        border-radius: 10px;
+        border: 1px solid #EBEBEB;
     }
 
     .detail-item {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 6px;
     }
 
     .detail-label {
-        font-size: 0.85em;
-        color: #666;
+        font-size: 0.78em;
+        color: var(--primary-color);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
+        letter-spacing: 0.8px;
+        font-weight: 700;
     }
 
     .detail-value {
-        font-size: 1em;
-        color: var(--text-color);
+        font-size: 0.95em;
+        color: #333;
         font-weight: 500;
     }
 
@@ -302,7 +303,26 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* Botões de ação */
+    /* Botões de ação (estilizar botões Streamlit dentro do expander) */
+    .stExpander [data-testid="stVerticalBlock"] button {
+        padding: 10px 100px !important;
+        font-size: 0.95em !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: 2px solid var(--primary-color) !important;
+        color: var(--primary-color) !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+    }
+
+    .stExpander [data-testid="stVerticalBlock"] button:hover {
+        background: var(--primary-color) !important;
+        color: white !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(158, 5, 32, 0.3) !important;
+    }
+
     .action-buttons {
         display: flex;
         gap: 10px;
@@ -310,132 +330,6 @@ st.markdown("""
         flex-wrap: wrap;
         padding-top: 20px;
         border-top: 1px solid var(--border-color);
-    }
-
-    .action-button {
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: none;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-        text-align: center;
-        min-width: 100px;
-    }
-
-    .btn-primary {
-        background-color: var(--primary-color);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background-color: #7A041A;
-        transform: translateY(-2px);
-    }
-
-    .btn-secondary {
-        background-color: var(--secondary-background);
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background-color: #7A9B95;
-        transform: translateY(-2px);
-    }
-
-    .btn-outline {
-        background-color: white;
-        border: 2px solid var(--primary-color);
-        color: var(--primary-color);
-    }
-
-    .btn-outline:hover {
-        background-color: var(--primary-color);
-        color: white;
-    }
-
-    /* Paginação */
-    .pagination-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin: 30px 0;
-        gap: 15px;
-    }
-
-    .pagination-info {
-        background: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        font-weight: 500;
-    }
-
-    /* Legenda de ícones */
-    .icon-legend {
-        background: white;
-        border-radius: 8px;
-        padding: 15px;
-        margin: 20px 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .legend-title {
-        font-weight: 600;
-        color: var(--primary-color);
-        margin-bottom: 10px;
-    }
-
-    .legend-items {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 0.9em;
-    }
-
-    /* Favoritos container */
-    .favorito-item {
-        background: white;
-        border: 1px solid #E9E3DF;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-        border-left: 3px solid #FFD700;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-    
-    .favorito-info {
-        flex: 1;
-    }
-    
-    .favorito-numero {
-        color: #9E0520;
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-    }
-    
-    .favorito-detalhes {
-        color: #666;
-        font-size: 0.9rem;
-        line-height: 1.4;
-    }
-    
-    .favorito-actions {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
     }
 
     /* Responsividade */
@@ -567,7 +461,6 @@ try:
         <div class="legend-items">
             <div class="legend-item"><span>💬</span> Comentários não lidos</div>
             <div class="legend-item"><span>📎</span> Possui anexos</div>
-
             <div class="legend-item"><span>🔥</span> Urgente</div>
             <div class="legend-item"><span>⚠️</span> Prioritário</div>
         </div>
@@ -599,12 +492,6 @@ try:
     else:
         st.markdown(f'<div class="pagination-info">📊 Encontrados: {len(processos_com_procurador)} processos</div>', unsafe_allow_html=True)
 
-        # Otimização: Pré-busca de dados
-
-        # Ideally we refetch only if we didn't fetch above, but `favs_ids` logic above is valid. 
-        # But wait, `favs_ids` was only for Favorites section. We can reuse or re-query.
-        # Let's ensure `favs_ids` is available. It is defined in scope above.
-        
         processo_ids_pagina = [p['id'] for p in processos_com_procurador]
         
         anexos_rows = select_all("anexos_processo", "id_processo")
@@ -692,48 +579,37 @@ try:
                 # Botões de ação
                 st.markdown('<div class="action-buttons">', unsafe_allow_html=True)
                 
-                b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns([0.2, 1, 1, 1, 1])
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
                 
                 with b_col1:
-                    is_favorito = p['id'] in favoritos_cache
-                    star_icon = "⭐" if is_favorito else "☆"
-                    if st.button(star_icon, key=f"fav_proc_{p['id']}", help="Marcar como favorito"):
-                        toggle_process_favorite(st.session_state.user_id, p['id'])
-                        st.rerun()
-
-                with b_col2:
                     if st.button("✅ Marcar como Finalizado", key=f"procurador_concluiu_{p['id']}", width='stretch', type="primary"):
                         update_by_id("processos", p['id'], {
                             "status_chefe": "Finalizado",  
                             "status_servidor": "Finalizado",
                             "data_finalizacao": datetime.now().isoformat()
                         })
-                        # Unfavorite logic should handle itself or be ignored here based on UI
-                        if p['id'] in favoritos_cache:
-                            toggle_process_favorite(st.session_state.user_id, p['id']) # Remove
                         st.success(f"✅ Processo {p.get('processo_numero')} finalizado!")
                         st.rerun()
                 
-                with b_col3:
+                with b_col2:
                     if st.button("↩️ Devolver para o Gabinete", key=f"procurador_devolve_{p['id']}", width='stretch'):
                         update_by_id("processos", p['id'], {"status_chefe": "Aguardando Análise", "status_servidor": "Concluído"})
-                        if p['id'] in favoritos_cache:
-                            toggle_process_favorite(st.session_state.user_id, p['id']) # Remove
                         st.warning(f"↩️ Processo {p.get('processo_numero')} devolvido para revisão!")
                         st.rerun()
                 
-                with b_col4:
+                with b_col3:
                     button_label = "💬 Comentário Não Lido" if tem_nao_lidos else "💬 Comentários"
                     button_type = "primary" if tem_nao_lidos else "secondary"
                     if st.button(button_label, key=f"comments_proc_{p['id']}", width='stretch', type=button_type):
                         st.session_state['processo_id'] = p['id']
-                        st.session_state['came_from'] = 'Pages/Processos_com_Procurador.py'
-                        st.switch_page('Pages/Comentarios_Processo.py')
+                        st.session_state['came_from'] = 'pages/Processos_com_Procurador.py'
+                        st.switch_page('pages/Comentarios_Processo.py')
                 
-                with b_col5:
+                with b_col4:
                     if st.button("📜 Histórico", key=f"hist_proc_{p['id']}", width='stretch'):
                         st.session_state.history_visible_procurador[p['id']] = not st.session_state.history_visible_procurador.get(p['id'], False)
                         st.rerun()
+
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
