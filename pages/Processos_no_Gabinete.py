@@ -270,6 +270,18 @@ st.markdown("""
         font-size: 1.2em;
     }
 
+    .server-info, .deadline-info {
+        font-size: 0.85em;
+        color: #555;
+        padding: 4px 10px;
+        background: #f0f0f0;
+        border-radius: 6px;
+    }
+
+    .server-info strong, .deadline-info strong {
+        color: #333;
+    }
+
     /* Conteúdo do processo */
     .process-content {
         padding: 25px;
@@ -1042,8 +1054,8 @@ else:
                             <div class="process-number">{item['numero']}</div>
                             <div class="process-status {status_class}">{status_display}</div>
                             {mpc_badge}
-                            <div>Servidor: {item['servidor_nome']}</div>
-                            <div>{f"Prazo: {item['prazo_restante']} dias (vence {item['data_final'].strftime('%d/%m/%Y')})" if item['prazo_restante'] != float('inf') and item.get('data_final') else ""}</div>
+                            <span class="server-info"><strong>Servidor:</strong> {item['servidor_nome']}</span>
+                            {f'<span class="deadline-info"><strong>Prazo:</strong> {item["prazo_restante"]} dias (vence {item["data_final"].strftime("%d/%m/%Y")})</span>' if item['prazo_restante'] != float('inf') and item.get('data_final') else ''}
                         </div>
                      </div>
                      """, unsafe_allow_html=True)
