@@ -1047,6 +1047,15 @@ else:
                                  mpc_badge = f'<div class="process-status" style="background-color: #6c757d; color: white; margin-left: 5px; opacity: 0.7;">{mpc_status}</div>'
                      
                      # Header
+                     prazo_text = ""
+                     if item['prazo_restante'] != float('inf') and item.get('data_final'):
+                         prazo_text = f"Prazo: {item['prazo_restante']} dias (vence {item['data_final'].strftime('%d/%m/%Y')})"
+                     
+                     servidor_badge = f'<span style="font-size:0.85em;color:#555;padding:4px 10px;background:#f0f0f0;border-radius:6px;">👤 {item["servidor_nome"]}</span>'
+                     prazo_badge = ""
+                     if prazo_text:
+                         prazo_badge = f'<span style="font-size:0.85em;color:#555;padding:4px 10px;background:#f0f0f0;border-radius:6px;">📅 {prazo_text}</span>'
+                     
                      st.markdown(f"""
                      <div class="process-header">
                         <div class="process-info">
@@ -1054,8 +1063,10 @@ else:
                             <div class="process-number">{item['numero']}</div>
                             <div class="process-status {status_class}">{status_display}</div>
                             {mpc_badge}
-                            <span class="server-info"><strong>Servidor:</strong> {item['servidor_nome']}</span>
-                            {f'<span class="deadline-info"><strong>Prazo:</strong> {item["prazo_restante"]} dias (vence {item["data_final"].strftime("%d/%m/%Y")})</span>' if item['prazo_restante'] != float('inf') and item.get('data_final') else ''}
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;padding:8px 20px 15px 20px;">
+                            {servidor_badge}
+                            {prazo_badge}
                         </div>
                      </div>
                      """, unsafe_allow_html=True)
