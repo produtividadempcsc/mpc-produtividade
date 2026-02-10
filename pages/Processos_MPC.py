@@ -8,20 +8,13 @@ from sidebar import build_sidebar
 import utils.ui as ui_utils
 import utils.common as common_utils
 import file_utils
-# Módulos do projeto
-import utils.ui as ui_utils
-import utils.common as common_utils
-import file_utils
 from forms import display_edit_processo_form
 from supabase_client import select_all, QueryBuilder, insert, delete_by_id
 from db_compat import (
     get_user_by_id,
     get_all_users,
     calculate_due_date_with_details,
-    is_process_favorite,
-    toggle_process_favorite,
-    get_product_types, # ensure this exists or use select_all('tipo_produto')
-    get_user_favorites
+    get_product_types
 )
 # Inicializa a conexão com o banco de dados
 
@@ -265,33 +258,38 @@ st.markdown("""
 
     /* Conteúdo do processo */
     .process-content {
-        padding: 25px;
+        padding: 10px 10px;
+        font-family: inherit;
     }
 
     .process-details {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
         margin-bottom: 20px;
+        padding: 18px;
+        background: #FAFAFA;
+        border-radius: 10px;
+        border: 1px solid #EBEBEB;
     }
 
     .detail-item {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 6px;
     }
 
     .detail-label {
-        font-size: 0.85em;
-        color: #666;
+        font-size: 0.78em;
+        color: var(--primary-color);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
+        letter-spacing: 0.8px;
+        font-weight: 700;
     }
 
     .detail-value {
-        font-size: 1em;
-        color: var(--text-color);
+        font-size: 0.95em;
+        color: #333;
         font-weight: 500;
     }
 
@@ -310,7 +308,26 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* Botões de ação */
+    /* Botões de ação (estilizar botões Streamlit dentro do expander) */
+    .stExpander [data-testid="stVerticalBlock"] button {
+        padding: 10px 100px !important;
+        font-size: 0.95em !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: 2px solid var(--primary-color) !important;
+        color: var(--primary-color) !important;
+        background: white !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+    }
+
+    .stExpander [data-testid="stVerticalBlock"] button:hover {
+        background: var(--primary-color) !important;
+        color: white !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(158, 5, 32, 0.3) !important;
+    }
+
     .action-buttons {
         display: flex;
         gap: 10px;
@@ -318,50 +335,6 @@ st.markdown("""
         flex-wrap: wrap;
         padding-top: 20px;
         border-top: 1px solid var(--border-color);
-    }
-
-    .action-button {
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: none;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-        text-align: center;
-        min-width: 100px;
-    }
-
-    .btn-primary {
-        background-color: var(--primary-color);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background-color: #7A041A;
-        transform: translateY(-2px);
-    }
-
-    .btn-secondary {
-        background-color: var(--secondary-background);
-        color: white;
-    }
-
-    .btn-secondary:hover {
-        background-color: #7A9B95;
-        transform: translateY(-2px);
-    }
-
-    .btn-outline {
-        background-color: white;
-        border: 2px solid var(--primary-color);
-        color: var(--primary-color);
-    }
-
-    .btn-outline:hover {
-        background-color: var(--primary-color);
-        color: white;
     }
 
     /* Paginação */
@@ -874,56 +847,22 @@ else:
                 # Botões de ação
                 st.markdown('<div class="action-buttons">', unsafe_allow_html=True)
                 
-                action_cols = st.columns([1, 2, 2, 2, 2])
+                action_cols = st.columns(3)
                 
-                # Ícones de ação
                 with action_cols[0]:
-                    icon_col1, icon_col2 = st.columns(2)
-                    with icon_col1:
-                         # Need product description. Where to get?
-                         # I need to fetch it in cache. Cache was just name?
-                         # produtos_cache = {p['id']: p for p in all_products} (it IS dict of full obj)
-                         prod_dict = produtos_cache.get(processo.get('id_tipo_produto'))
-                         desc = prod_dict.get('descricao') if prod_dict else None
-                         if desc:
-                            with st.popover("📖", help="Ver descrição do tipo de produto"):
-                                st.markdown(desc)
-                         else:
-                            st.button("📖", key=f"wiki_gabinete_{pid}", help="Nenhuma descrição disponível", disabled=True)
-                    with icon_col2:
-                        template_path = prod_dict.get('template_path') if prod_dict else None
-                        template_exists = template_path and os.path.exists(template_path)
-                        if template_exists:
-                            with open(template_path, "rb") as f:
-                                st.download_button(
-                                    label="📄",
-                                    data=f.read(),
-                                    file_name=os.path.basename(template_path),
-                                    mime="application/octet-stream",
-                                    key=f"template_gabinete_{processo.get('id')}",
-                                    help="Baixar modelo"
-                                )
-                        else:
-                            st.button("📄", key=f"template_gabinete_{processo.get('id')}", help="Nenhum modelo disponível", disabled=True)
-
-                # Botões principais
-                with action_cols[1]:
                     if st.button("✏️ Editar Processo", key=f"edit_detalhe_{processo.get('id')}", width='stretch'):
                         st.session_state['processo_para_editar_id'] = processo.get('id')
                         st.rerun()
                 
-                with action_cols[2]:
+                with action_cols[1]:
                     button_label = "💬 Comentário Não Lido" if tem_nao_lidos else "💬 Comentários"
                     button_type = "primary" if tem_nao_lidos else "secondary"
                     if st.button(button_label, key=f"comments_proc_{processo.get('id')}", width='stretch', type=button_type):
                         st.session_state['processo_id'] = processo.get('id')
-                        st.session_state['came_from'] = 'Pages/Processos_no_Gabinete.py'
-                        st.switch_page('Pages/Comentarios_Processo.py')
-
-                with action_cols[3]:
-                    st.empty() # Botão 'Ver Processo' removido
+                        st.session_state['came_from'] = 'pages/Processos_MPC.py'
+                        st.switch_page('pages/Comentarios_Processo.py')
                 
-                with action_cols[4]:
+                with action_cols[2]:
                     if "show_history" not in st.session_state:
                         st.session_state.show_history = {}
                     if st.button("📜 Histórico", key=f"hist_chefe_{processo.get('id')}", width='stretch'):
