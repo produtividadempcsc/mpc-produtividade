@@ -79,9 +79,6 @@ def display_icon_legend():
                 - ⚠️ Prioritário
             - 💬 **Comentários:** Indica a presença de comentários não lidos.
             - 📎 **Anexos:** Indica que o processo possui arquivos anexados.
-            - ⭐ **Favorito:** Processo marcado como favorito.
-            - 📖 **Descrição:** Mostra a descrição detalhada do tipo de produto.
-            - 📄 **Modelo:** Permite baixar o modelo de documento para o tipo de produto.
             """
         )
 
