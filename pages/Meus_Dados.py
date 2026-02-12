@@ -8,7 +8,7 @@ from db_compat import get_all_product_types
 from utils.timezone import today_brazil
 from utils.analytics_utils import (
     prepare_master_dataframe, calculate_metrics_servidor,
-    create_metric_card, format_and_plot
+    create_metric_card, format_and_plot, calculate_acervo_snapshot
 )
 import ui_utils
 import plotly.express as px
@@ -176,7 +176,7 @@ user_id = st.session_state.user_id
 def load_user_data(uid):
     """Carrega dados do usuário com cache e queries otimizadas."""
     # Selecionar apenas colunas necessárias para processos (reduz ~70% do payload)
-    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,prazo_servidor_aplicado,prazo_total_dias_suspenso"
+    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,prazo_servidor_aplicado,prazo_total_dias_suspenso,nao_se_aplica_prazo_servidor,ignorar_revisao_chefe"
     processos = QueryBuilder("processos") \
         .eq("id_servidor_responsavel", uid) \
         .select(processos_cols) \
@@ -192,23 +192,40 @@ def load_user_data(uid):
         .select("id,nome_produto,tipo_contagem_prazo") \
         .execute()
     
-    return processos, usuarios, tipos
+    # Buscar histórico de devoluções (em chunks para evitar erro de URL muito longa)
+    process_ids = [p['id'] for p in processos]
+    historico_devolucoes = []
+    
+    if process_ids:
+        chunk_size = 100
+        for i in range(0, len(process_ids), chunk_size):
+            chunk = process_ids[i:i + chunk_size]
+            try:
+                hist_chunk = QueryBuilder("processo_historico") \
+                    .eq("evento", "Devolvido pelo Chefe") \
+                    .in_list("id_processo", chunk) \
+                    .execute()
+                historico_devolucoes.extend(hist_chunk)
+            except Exception as e:
+                print(f"[MEUS_DADOS] Erro ao buscar chunk de histórico: {e}")
+                
+    return processos, usuarios, tipos, historico_devolucoes
 
 # Mostrar loading enquanto carrega
 loading_placeholder.markdown('''
 <div class="loading-container">
     <div class="loading-spinner"></div>
-    <div class="loading-text">🔄 Carregando seus dados de produtividade...</div>
+    <div class="loading-text">🔄 Carregando dados e calculando indicadores...</div>
     <p style="color: #888; margin-top: 10px; font-size: 0.9em;">Isso pode levar alguns segundos</p>
 </div>
 ''', unsafe_allow_html=True)
 
-all_user_processes, all_users, all_types = load_user_data(user_id)
+all_user_processes, all_users, all_types, all_history = load_user_data(user_id)
 
-# Limpar loading
-loading_placeholder.empty()
+# Loading movido para após o processamento
 
 if not all_user_processes:
+    loading_placeholder.empty()
     st.info("📋 Você ainda não possui processos atribuídos.")
     st.stop()
 
@@ -253,38 +270,30 @@ if not df_servidor.empty:
     if filtro_tipos:
         df_filtered = df_filtered[df_filtered['nome_produto'].isin(filtro_tipos)]
 
-# Buscar processos pendentes de revisão (concluídos pelo servidor, aguardando chefe)
-processos_pendentes_revisao = [
-    p for p in all_user_processes 
-    if p.get('status_servidor') == 'Concluído' and p.get('status_chefe') in ['Aguardando Análise', 'Revisão Atrasada']
-]
+# Buscar processos pendentes de revisão (concluídos pelo servidor, aguardando chefe) using official logic
+# Returns (acervo_servidor, acervo_chefe) - we want acervo_chefe count
+_, df_acervo_chefe = calculate_acervo_snapshot(df_master, pd.Timestamp.now())
+processos_pendentes_revisao = len(df_acervo_chefe)
 
-# Buscar devoluções
+# Filtrar devoluções do histórico cacheado
 historico_devolucoes = []
-try:
-    # Buscar histórico de devoluções para processos do usuário
-    process_ids = [p['id'] for p in all_user_processes]
-    if process_ids:
-        hist_data = QueryBuilder("processo_historico") \
-            .eq("evento", "Devolvido pelo Chefe") \
-            .in_list("id_processo", process_ids) \
-            .execute()
-        
-        for h in hist_data:
-            ts = h.get('timestamp') or h.get('created_at')
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts[:10]) if isinstance(ts, str) else ts
-                    if isinstance(dt, datetime):
-                        dt = dt.date()
-                    if f_ini <= dt <= f_fim:
-                        historico_devolucoes.append(h)
-                except:
-                    pass
-except Exception as e:
-    print(f"[MEUS_DADOS] Erro ao buscar devoluções: {e}")
+if all_history:
+    for h in all_history:
+        ts = h.get('timestamp') or h.get('created_at')
+        if ts:
+            try:
+                dt = datetime.fromisoformat(ts[:10]) if isinstance(ts, str) else ts
+                if isinstance(dt, datetime):
+                    dt = dt.date()
+                if f_ini <= dt <= f_fim:
+                    historico_devolucoes.append(h)
+            except:
+                pass
 
 total_devolucoes = len(historico_devolucoes)
+
+# Limpar loading após processamento
+loading_placeholder.empty()
 
 # --- KPIs ---
 st.markdown("### 📈 Indicadores do Período")
@@ -443,11 +452,35 @@ if not df_filtered.empty:
             paper_bgcolor='rgba(0,0,0,0)'
         )
         st.plotly_chart(fig5, use_container_width=True)
-        
-        with st.expander("📋 Ver dados detalhados"):
-            st.dataframe(tipos_count, use_container_width=True, hide_index=True)
     else:
         st.info("Sem dados de tipos de processo para exibir.")
 
 else:
     st.info("📋 Nenhum processo concluído no período selecionado. Ajuste os filtros de data.")
+
+st.markdown("---")
+with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
+    st.markdown("""
+    ### 📝 Como os indicadores são calculados?
+    
+    Esta página utiliza a **mesma metodologia oficial** do Relatório Mensal de Produtividade (MPC/SC), garantindo consistência entre seus dados pessoais e o relatório institucional.
+    
+    #### 1. Tempo Médio (Duração)
+    Calcula a média de dias entre a **Data de Atribuição** e a **Data de Conclusão** de cada processo.
+    - **Dias Úteis:** Para processos com contagem em dias úteis, descontamos fins de semana e feriados oficiais.
+    - **Suspensão:** Dias de suspensão manual (lançados no sistema) são descontados da duração total.
+    - **Afastamentos:** O sistema respeita as regras de contagem baseadas no tipo de prazo.
+    
+    #### 2. Percentual No Prazo
+    Um processo é considerado "No Prazo" se:  
+    `Data Conclusão <= Data Atribuição + Prazo (em dias) + Suspensões`
+    
+    #### 3. Pendentes Revisão
+    Reflete o **estado atual** da sua fila de espera. Inclui:
+    - Processos que você já concluiu, mas o Chefe ainda não revisou.
+    - Processos que foram **devolvidos** pelo Chefe ou Procurador e aguardam nova atuação.
+    - *Exclui:* Processos marcados como "Não se aplica prazo" ou que pulam a etapa de revisão.
+    
+    #### 4. Devoluções
+    Contabiliza quantas vezes um processo retornou para sua fase (devolvido pelo Chefe) dentro do período selecionado.
+    """)
