@@ -14,6 +14,16 @@ from utils.analytics_utils import (
 )
 import ui_utils
 
+# Helper function definition needed for calculation
+def calculate_due_date_safe(row):
+    return calculate_due_date(
+        start_date=row['data_atribuicao_servidor'].date(),
+        prazo_dias=row['prazo_servidor_aplicado'],
+        tipo_contagem=row['tipo_contagem_prazo'],
+        id_usuario=row['id_servidor_responsavel'],
+        dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
+    )
+
 # --- Guarda de Autenticação ---
 auth.auth_guard()
 
@@ -541,12 +551,3 @@ with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
     - **Atrasados:** Processos cujo prazo calculado já venceu em relação à data de hoje.
     """)
 
-# Helper function definition needed for calculation above if not in utils
-def calculate_due_date_safe(row):
-    return calculate_due_date(
-        start_date=row['data_atribuicao_servidor'].date(),
-        prazo_dias=row['prazo_servidor_aplicado'],
-        tipo_contagem=row['tipo_contagem_prazo'],
-        id_usuario=row['id_servidor_responsavel'],
-        dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
-    )
