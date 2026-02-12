@@ -35,31 +35,34 @@ def calculate_metrics_servidor(df):
     if df.empty:
         return df
         
+    # Duração: respeita tipo de contagem (dias úteis vs corridos) e suspensões manuais
+    # Alinhado com relatorios.py linhas 256-273
     df['duracao_servidor'] = df.apply(
-        lambda row: utils.calculate_calendar_days_minus_leave(
-            start_date=row['data_atribuicao_servidor'].date(),
-            end_date=row['data_conclusao_servidor'].date(),
-            id_usuario=row['id_servidor_responsavel']
+        lambda row: (
+            max(0, utils.calculate_net_work_days(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_servidor'].date(),
+                row['id_servidor_responsavel']
+            ) - row.get('prazo_total_dias_suspenso', 0))
+            if row.get('tipo_contagem_prazo') == 'dias uteis'
+            else utils.calculate_net_duration_calendar(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_servidor'].date(),
+                row['id_servidor_responsavel'],
+                row.get('prazo_total_dias_suspenso', 0)
+            )
         ), axis=1
     )
 
-    df['dias_afastamento_periodo'] = df.apply(
-        lambda row: utils.get_leave_days_for_period(
-            id_usuario=row['id_servidor_responsavel'],
-            start_date=row['data_atribuicao_servidor'].date(),
-            end_date=row['data_conclusao_servidor'].date()
-        ), axis=1
-    )
-    
-    df['prazo_servidor_ajustado'] = df['prazo_servidor_aplicado'] + df['dias_afastamento_periodo']
-    
+    # Data-limite: calculate_due_date já lida internamente com afastamentos
+    # Alinhado com relatorios.py linhas 274-276
     df['data_final_teorica'] = df.apply(
         lambda row: utils.calculate_due_date(
             start_date=row['data_atribuicao_servidor'].date(),
-            prazo_dias=row['prazo_servidor_ajustado'],
+            prazo_dias=row['prazo_servidor_aplicado'],
             tipo_contagem=row['tipo_contagem_prazo'],
             id_usuario=row['id_servidor_responsavel'],
-            dias_suspensos=row['prazo_total_dias_suspenso']
+            dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
         ), axis=1
     )
     
@@ -75,31 +78,34 @@ def calculate_metrics_chefe(df):
     if df.empty:
         return df
         
+    # Duração revisão: respeita tipo de contagem e suspensões manuais
+    # Alinhado com relatorios.py linhas 282-298
     df['duracao_revisao_chefe'] = df.apply(
-        lambda row: utils.calculate_calendar_days_minus_leave(
-            start_date=row['data_conclusao_servidor'].date(),
-            end_date=row['data_conclusao_chefe'].date(),
-            id_usuario=row['id_chefe_gabinete']
+        lambda row: (
+            max(0, utils.calculate_net_work_days(
+                row['data_conclusao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                row['id_chefe_gabinete']
+            ) - row.get('prazo_total_dias_suspenso', 0))
+            if row.get('tipo_contagem_prazo') == 'dias uteis'
+            else utils.calculate_net_duration_calendar(
+                row['data_conclusao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                row['id_chefe_gabinete'],
+                row.get('prazo_total_dias_suspenso', 0)
+            )
         ), axis=1
     )
     
-    df['dias_afastamento_periodo_chefe'] = df.apply(
-        lambda row: utils.get_leave_days_for_period(
-            id_usuario=row['id_chefe_gabinete'],
-            start_date=row['data_conclusao_servidor'].date(),
-            end_date=row['data_conclusao_chefe'].date()
-        ), axis=1
-    )
-    
-    df['prazo_chefe_ajustado'] = df['prazo_chefe_aplicado'] + df['dias_afastamento_periodo_chefe']
-    
+    # Data-limite revisão: calculate_due_date já lida internamente com afastamentos
+    # Alinhado com relatorios.py linhas 300-302
     df['data_final_revisao_teorica'] = df.apply(
         lambda row: utils.calculate_due_date(
             start_date=row['data_conclusao_servidor'].date(),
-            prazo_dias=row['prazo_chefe_ajustado'],
+            prazo_dias=row['prazo_chefe_aplicado'],
             tipo_contagem=row['tipo_contagem_prazo'],
             id_usuario=row['id_chefe_gabinete'],
-            dias_suspensos=row['prazo_total_dias_suspenso']
+            dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
         ), axis=1
     )
     
@@ -110,21 +116,51 @@ def calculate_metrics_chefe(df):
 def calculate_acervo_snapshot(df, data_ref_ts):
     """
     Calcula o estado do acervo em uma data de referência específica.
+    Alinhado com relatorios.py Métricas 4 e 8:
+    - Exclui processos que pulam etapas
+    - Inclui processos devolvidos
     """
     if df.empty:
         return pd.DataFrame(), pd.DataFrame()
         
-    # Acervo Servidores: Atribuído <= data_ref E (Sem Conclusão OU Concluído > data_ref)
+    # Acervo Servidores (Métrica 4 do relatório)
     acervo_serv = df[
+        # Base: servidor recebeu até a data de referência
         (df['data_atribuicao_servidor'] <= data_ref_ts) &
-        ( (df['data_conclusao_servidor'].isna()) | (df['data_conclusao_servidor'] > data_ref_ts) )
+        # Excluir processos que pulam a fase do servidor
+        (~df['nao_se_aplica_prazo_servidor'].fillna(False).astype(bool)) &
+        (
+            # Caso normal: processo não concluído pelo servidor
+            (
+                (
+                    (df['data_conclusao_servidor'].isna()) |
+                    (df['data_conclusao_servidor'] > data_ref_ts)
+                ) &
+                (df['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo']))
+            )
+            |
+            # Caso devolvido: processo voltou para o servidor
+            (df['status_servidor'] == 'Devolvido')
+        )
     ].copy()
     
-    # Acervo Chefe: Concluido Servidor <= data_ref E (Sem Conclusão Chefe OU Concluido > data_ref)
+    # Acervo Chefe (Métrica 8 do relatório)
     acervo_chefe = df[
+        # Base: servidor concluiu até a data de referência
         (df['data_conclusao_servidor'].notna()) &
         (df['data_conclusao_servidor'] <= data_ref_ts) &
-        ( (df['data_conclusao_chefe'].isna()) | (df['data_conclusao_chefe'] > data_ref_ts) )
+        # Excluir processos que pulam a fase do chefe
+        (~df['ignorar_revisao_chefe'].fillna(False).astype(bool)) &
+        (
+            # Caso normal: chefe ainda não revisou
+            (
+                (df['data_conclusao_chefe'].isna()) |
+                (df['data_conclusao_chefe'] > data_ref_ts)
+            )
+            |
+            # Caso devolvido pelo procurador: voltou para o chefe
+            (df['status_chefe'] == 'Devolvido')
+        )
     ].copy()
     
     return acervo_serv, acervo_chefe
