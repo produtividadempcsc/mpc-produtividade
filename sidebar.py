@@ -23,7 +23,7 @@ MENU_ITEMS = {
 }
 
 PROFILE_MENUS = {
-    "Administrador": ["Meu Perfil", "Administração", "Gerenciar Usuários", "Processos MPC", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
+    "Administrador": ["Meu Perfil", "Administração", "Gerenciar Usuários", "Processos MPC", "Gabinete em Números", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
     "Servidor": ["Meu Perfil", "Meus Processos", "Meus Dados", "Central IA", "Gestão de Afastamentos", "Manual do Usuário"],
     "Chefe de Gabinete": ["Meu Perfil", "Meus Processos", "Processos no Gabinete", "Gabinete em Números", "Processos para Revisão", "Processos com Procurador", "Gerenciar Usuários", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
     "Procurador": ["Meu Perfil", "Processos MPC", "Gabinete em Números", "Página Analítica", "Central IA", "Gestão de Afastamentos", "Gerenciar Substituições", "Manual do Usuário"]
