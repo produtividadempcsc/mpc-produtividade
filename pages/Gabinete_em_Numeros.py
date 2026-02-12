@@ -18,7 +18,7 @@ import ui_utils
 auth.auth_guard()
 
 # --- Cláusula de Guarda de Perfil ---
-allowed_profiles = ["Chefe de Gabinete", "Procurador"]
+allowed_profiles = ["Chefe de Gabinete", "Procurador", "Administrador"]
 current_profile = st.session_state.get("active_perfil")
 
 if current_profile not in allowed_profiles:
@@ -122,7 +122,7 @@ loading_placeholder = st.empty()
 current_user_id = st.session_state.user_id
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_gabinete_context(user_id, profile):
+def get_gabinete_context(user_id, profile, admin_target_id=None):
     """Identifica o Procurador alvo e todos os membros do gabinete."""
     target_procurador_id = None
     
@@ -133,6 +133,8 @@ def get_gabinete_context(user_id, profile):
         link = QueryBuilder("procurador_chefes").eq("chefe_id", user_id).execute()
         if link:
             target_procurador_id = link[0]['procurador_id']
+    elif profile == "Administrador" and admin_target_id:
+        target_procurador_id = admin_target_id
     
     if not target_procurador_id:
         return None, [], []
@@ -186,7 +188,23 @@ loading_placeholder.markdown('''
 ''', unsafe_allow_html=True)
 
 # Executar cargas
-target_procurador_id, chefes_ids, all_users_list = get_gabinete_context(current_user_id, current_profile)
+admin_target = None
+if current_profile == "Administrador":
+    # Buscar lista de procuradores para o admin selecionar
+    all_users_temp = get_all_users()
+    procuradores_opts = {u['nome_completo']: u['id'] for u in all_users_temp if u['perfil'] == 'Procurador'}
+    
+    if not procuradores_opts:
+        st.error("Nenhum procurador encontrado no sistema.")
+        st.stop()
+        
+    selected_proc_name = st.selectbox(
+        "👮‍♂️ [Modo Admin] Selecione o Gabinete para Visualizar:", 
+        options=list(procuradores_opts.keys())
+    )
+    admin_target = procuradores_opts[selected_proc_name]
+
+target_procurador_id, chefes_ids, all_users_list = get_gabinete_context(current_user_id, current_profile, admin_target)
 
 if not target_procurador_id:
     loading_placeholder.empty()
