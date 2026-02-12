@@ -322,10 +322,10 @@ kpi_acervo_total = len(acervo_s_now) + len(acervo_c_now)
 # 5. No Prazo Servidores (%)
 pct_prazo_serv = (df_concluidos_servidor['no_prazo_servidor'].sum() / kpi_conc_serv * 100) if kpi_conc_serv > 0 else 0
 
-# 6. Quantidade de Servidores (Ativos no período/nos dados)
-# Conta servidores distintos que tiveram alguma movimentação ou estão no quadro
-# Vamos pegar todos os servidores presentes na tabela 'processos' deste gabinete
-qtd_servidores = df_master['id_servidor_responsavel'].nunique()
+# 6. Percentual Prazo Chefe (Substituindo Qtd Servidores)
+# Conta processos concluídos pelo chefe dentro do prazo
+# A coluna calculada em calculate_metrics_chefe é 'revisao_no_prazo'
+pct_prazo_chefe = (df_concluidos_chefe['revisao_no_prazo'].sum() / kpi_rev_chefe * 100) if kpi_rev_chefe > 0 else 0
 
 # 7. Tempo Médio Servidores
 tm_serv = df_concluidos_servidor['duracao_servidor'].mean() if not df_concluidos_servidor.empty else 0
@@ -347,7 +347,7 @@ with k3: st.metric("👀 Processos Revisados (Chefes)", kpi_rev_chefe)
 
 with k4: st.metric("⚖️ Aprovados pelo Procurador", kpi_aprov_proc, help="Processos finalizados pelo Procurador")
 with k5: st.metric("📂 Acervo Total em Tramitação", kpi_acervo_total, help="Total de processos ativos (Servidores + Chefes) agora")
-with k6: st.metric("👥 Quantidade de Servidores Ativos", qtd_servidores)
+with k6: st.metric("🎯 % Revisão no Prazo (Chefes)", f"{pct_prazo_chefe:.1f}%")
 
 with k7: st.metric("⏱️ Tempo Médio (Servidores)", f"{tm_serv:.1f} dias")
 with k8: st.metric("⏱️ Tempo Médio de Revisão (Chefes)", f"{tm_chefe:.1f} dias")
@@ -435,6 +435,24 @@ if not df_concluidos_servidor.empty:
         plot_bgcolor='rgba(0,0,0,0)',
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
+    st.plotly_chart(fig3, width="stretch")
+    
+    # Adicionar totais ao final da barra
+    fig3.add_trace(go.Scatter(
+        y=df_dist['servidor_nome'],
+        x=df_dist['Total'],
+        text=df_dist['Total'].apply(lambda x: str(int(x))),
+        mode='text',
+        textposition='middle right',
+        showlegend=False,
+        textfont=dict(color='black', size=12)
+    ))
+    
+    # Ajustar ranges para caber o texto do total
+    # Aumentar um pouco o eixo X
+    max_val = df_dist['Total'].max()
+    fig3.update_layout(xaxis_range=[0, max_val * 1.15])
+    
     st.plotly_chart(fig3, width="stretch")
 
 else:
