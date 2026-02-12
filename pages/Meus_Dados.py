@@ -466,7 +466,7 @@ with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
     Esta página utiliza a **mesma metodologia oficial** do Relatório Mensal de Produtividade (MPC/SC), garantindo consistência entre seus dados pessoais e o relatório institucional.
     
     #### 1. Tempo Médio (Duração)
-    Calcula a média de dias entre a **Data de Atribuição** e a **Data de Conclusão** de cada processo, em regra, contado em dia corridos descontados afastamentos.
+    Calcula a média de dias entre a **Data de Atribuição** e a **Data de Conclusão** de cada processo, em regra, contado em dias corridos descontados afastamentos.
     - **Dias Úteis:** Para processos com contagem em dias úteis, descontamos fins de semana, afastamento e feriados oficiais.
     - **Suspensão:** Dias de suspensão manual (lançados no sistema) são descontados da duração total.
     - **Afastamentos:** O sistema respeita as regras de contagem baseadas no tipo de prazo.
@@ -484,4 +484,5 @@ with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
     #### 4. Devoluções
     Contabiliza quantas vezes um processo retornou para sua fase (devolvido pelo Chefe) dentro do período selecionado.
     """)
+
 
