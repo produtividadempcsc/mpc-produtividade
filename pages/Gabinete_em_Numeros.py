@@ -380,7 +380,7 @@ if not df_concluidos_servidor.empty:
         )
         fig1.update_traces(textposition='outside')
         fig1.update_layout(yaxis={'categoryorder': 'total ascending'}, plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width="stretch")
         
     # 2) Tempo Médio por Servidor
     with c_g2:
@@ -393,7 +393,7 @@ if not df_concluidos_servidor.empty:
         )
         fig2.update_traces(textposition='outside')
         fig2.update_layout(yaxis={'categoryorder': 'total descending'}, plot_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     # 3) Distribuição Detalhada (Concluido vs Acervo)
     st.markdown("#### 📊 Processos Distribuídos por Servidor")
@@ -435,7 +435,7 @@ if not df_concluidos_servidor.empty:
         plot_bgcolor='rgba(0,0,0,0)',
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
 else:
     st.info("Sem dados de conclusão de servidores para o período selecionado.")
@@ -495,7 +495,7 @@ if len(dates_to_check) > 0:
             plot_bgcolor='rgba(0,0,0,0)',
             hovermode="x unified"
         )
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist, width="stretch")
 else:
     st.warning("Selecione um intervalo de datas maior para ver a evolução histórica.")
 
@@ -558,7 +558,7 @@ if not df_acervo_atual_serv.empty:
                 help="Processos cujo prazo já expirou."
             )
         },
-        use_container_width=True
+        width="stretch"
     )
 
 else:
