@@ -304,7 +304,7 @@ c1, c2, c3, c4, c5 = st.columns(5)
 total_concluidos = len(df_filtered) if not df_filtered.empty else 0
 tempo_medio = df_filtered['duracao_servidor'].mean() if not df_filtered.empty and 'duracao_servidor' in df_filtered.columns else 0
 pct_no_prazo = (df_filtered['no_prazo_servidor'].sum() / total_concluidos * 100) if total_concluidos > 0 else 0
-pendentes_revisao = len(processos_pendentes_revisao)
+pendentes_revisao = processos_pendentes_revisao
 
 with c1:
     st.metric("✅ Concluídos", f"{total_concluidos}")
