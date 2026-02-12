@@ -19,14 +19,15 @@ MENU_ITEMS = {
     "Gerenciar Substituições": "pages/Gerenciar_Substituicoes.py",
     "Manual do Usuário": "pages/Manual_do_Usuario.py",
     "Gabinete em Números": "pages/Gabinete_em_Numeros.py",
+    "MPC em Números": "pages/MPC_em_Numeros.py",
     "Página Analítica": "pages/Pagina_Analitica.py"
 }
 
 PROFILE_MENUS = {
-    "Administrador": ["Meu Perfil", "Administração", "Gerenciar Usuários", "Processos MPC", "Gabinete em Números", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
+    "Administrador": ["Meu Perfil", "Administração", "Gerenciar Usuários", "Processos MPC", "MPC em Números", "Gabinete em Números", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
     "Servidor": ["Meu Perfil", "Meus Processos", "Meus Dados", "Central IA", "Gestão de Afastamentos", "Manual do Usuário"],
     "Chefe de Gabinete": ["Meu Perfil", "Meus Processos", "Processos no Gabinete", "Gabinete em Números", "Processos para Revisão", "Processos com Procurador", "Gerenciar Usuários", "Gestão de Afastamentos", "Gerenciar Substituições", "Página Analítica", "Central IA", "Manual do Usuário"],
-    "Procurador": ["Meu Perfil", "Processos MPC", "Gabinete em Números", "Página Analítica", "Central IA", "Gestão de Afastamentos", "Gerenciar Substituições", "Manual do Usuário"]
+    "Procurador": ["Meu Perfil", "Processos MPC", "MPC em Números", "Gabinete em Números", "Página Analítica", "Central IA", "Gestão de Afastamentos", "Gerenciar Substituições", "Manual do Usuário"]
 }
 
 def build_sidebar():
