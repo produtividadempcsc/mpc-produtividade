@@ -342,6 +342,47 @@ else:
 
 st.markdown("---")
 
+# --- HISTÓRICO DE ACERVO (Estratificado por Servidor) ---
+st.markdown("### 📅 Evolução do Acervo (Por Servidor)")
+
+# Intervalo fixo de 24 meses para trás a partir do mês atual
+hoje_dt = today_brazil()
+mes_atual_fim = hoje_dt.replace(day=1) + pd.offsets.MonthEnd(0)
+dates_to_check_hist = pd.date_range(end=mes_atual_fim, periods=24, freq='ME')
+
+history_data_serv = []
+
+if len(dates_to_check_hist) > 0:
+    prog_bar_s = st.progress(0, text="Calculando histórico servidor...")
+    
+    for i, date_ref in enumerate(dates_to_check_hist):
+        pct = int((i + 1) / len(dates_to_check_hist) * 100)
+        prog_bar_s.progress(pct, text=f"Calculando histórico servidor: {date_ref.strftime('%m/%Y')}")
+        
+        # Snapshot na data
+        acervo_s, _ = calculate_acervo_snapshot(df_master, date_ref)
+        
+        if not acervo_s.empty:
+            counts = acervo_s['servidor_nome'].value_counts().reset_index()
+            counts.columns = ['servidor_nome', 'qtd']
+            counts['data'] = date_ref
+            history_data_serv.append(counts)
+            
+    prog_bar_s.empty()
+    
+    if history_data_serv:
+        df_history_s = pd.concat(history_data_serv)
+        
+        fig_hist_s = px.line(
+            df_history_s, x='data', y='qtd', color='servidor_nome', markers=True,
+            title="Evolução do Acervo por Servidor (Últimos 24 Meses)"
+        )
+        fig_hist_s.update_layout(plot_bgcolor='rgba(0,0,0,0)', hovermode="x unified")
+        st.plotly_chart(fig_hist_s, width="stretch")
+    else:
+        st.info("Sem dados históricos de servidores para exibir.")
+
+
 # --- CONTEXTO 2: CHEFES DE GABINETE ---
 st.markdown("## 👔 Visão por Chefes de Gabinete (Todo o MPC)")
 
@@ -415,33 +456,30 @@ st.markdown("---")
 # --- HISTÓRICO DE ACERVO (Estratificado por Chefe) ---
 st.markdown("### 📅 Evolução do Acervo (Por Chefe de Gabinete)")
 
-dates_to_check = pd.date_range(start=f_ini, end=f_fim, freq='ME')
+# Intervalo fixo de 24 meses para trás a partir do mês atual
+# Reutilizando a lógica de datas definida acima (dates_to_check_hist)
+# Caso não tenha sido definida (se o bloco acima não rodou por algum motivo), redefinimos:
+if 'dates_to_check_hist' not in locals():
+    hoje_dt = today_brazil()
+    mes_atual_fim = hoje_dt.replace(day=1) + pd.offsets.MonthEnd(0)
+    dates_to_check_hist = pd.date_range(end=mes_atual_fim, periods=24, freq='ME')
 
 history_data = []
 
-if len(dates_to_check) > 0:
+if len(dates_to_check_hist) > 0:
     prog_bar = st.progress(0, text="Calculando histórico de acervo...")
     
-    for i, date_ref in enumerate(dates_to_check):
-        pct = int((i + 1) / len(dates_to_check) * 100)
+    for i, date_ref in enumerate(dates_to_check_hist):
+        pct = int((i + 1) / len(dates_to_check_hist) * 100)
         prog_bar.progress(pct, text=f"Calculando histórico: {date_ref.strftime('%m/%Y')}")
         
         # Snapshot na data
         acervo_s, acervo_c = calculate_acervo_snapshot(df_master, date_ref)
         
         # Agrupar acervo TOTAL (servidor + chefe) por CHEFE 
-        # (Assumindo que cada processo tem um chefe responsável, mesmo se estiver com servidor)
-        
-        # Para processos com servidores, precisamos saber quem é o chefe deles (hierarquia)
-        # OU usamos 'id_chefe_gabinete' que está no processo. O 'id_chefe_gabinete' costuma ser preenchido quando atribuído?
-        # Sim, 'id_chefe_gabinete' deve estar no processo.
-        
-        # Vamos juntar os dois acervos (S e C) em um só para contar carga total do gabinete naquela data
         full_acervo = pd.concat([acervo_s, acervo_c])
         
         if not full_acervo.empty:
-            # Agrupar por chefe_gabinete_nome (já enriquecido no prepare_master_dataframe)
-            # Se prepare_master_dataframe não preencheu chefe_gabinete_nome para todos, pode ter NaN se o user nao existir no dict
             counts = full_acervo['chefe_gabinete_nome'].value_counts().reset_index()
             counts.columns = ['chefe_gabinete_nome', 'qtd']
             counts['data'] = date_ref
@@ -454,12 +492,12 @@ if len(dates_to_check) > 0:
         
         fig_hist = px.line(
             df_history, x='data', y='qtd', color='chefe_gabinete_nome', markers=True,
-            title="Evolução do Acervo por Gabinete"
+            title="Evolução do Acervo por Gabinete (Últimos 24 Meses)"
         )
         fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', hovermode="x unified")
         st.plotly_chart(fig_hist, width="stretch")
     else:
         st.info("Sem dados históricos para exibir.")
 else:
-    st.warning("Selecione um intervalo maior.")
+    st.warning("Erro ao calcular intervalo de datas.")
 
