@@ -1,236 +1,606 @@
-
-import pandas as pd
+import auth
 import streamlit as st
+import pandas as pd
 import plotly.express as px
-from datetime import datetime, date
-import db_compat as utils
+import plotly.graph_objects as go
+from datetime import datetime, date, timedelta
+from sidebar import build_sidebar
+from supabase_client import QueryBuilder
+from db_compat import get_all_product_types, get_all_users, calculate_due_date
+from utils.timezone import today_brazil
+from utils.analytics_utils import (
+    prepare_master_dataframe, calculate_metrics_servidor, 
+    calculate_metrics_chefe, calculate_acervo_snapshot
+)
+import ui_utils
 
-def prepare_master_dataframe(processos_data, usuarios_dict, tipos_dict):
-    """
-    Processa os dados brutos dos processos e retorna o DataFrame mestre enriquecido.
-    """
-    if not processos_data:
-        return pd.DataFrame()
-        
-    df = pd.DataFrame(processos_data)
-    
-    # Mapeamentos
-    df['servidor_nome'] = df['id_servidor_responsavel'].map(lambda x: usuarios_dict.get(x, {}).get('nome_completo', 'N/A'))
-    df['chefe_gabinete_nome'] = df['id_chefe_gabinete'].map(lambda x: usuarios_dict.get(x, {}).get('nome_completo', 'N/A'))
-    df['nome_produto'] = df['id_tipo_produto'].map(lambda x: tipos_dict.get(x, {}).get('nome_produto', 'N/A'))
-    df['tipo_contagem_prazo'] = df['id_tipo_produto'].map(lambda x: tipos_dict.get(x, {}).get('tipo_contagem_prazo', 'dias uteis'))
-
-    # Conversão de datas
-    date_cols = ['data_atribuicao_servidor', 'data_conclusao_servidor', 'data_conclusao_chefe']
-    for col in date_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
-        
-    return df
-
-def calculate_metrics_servidor(df):
-    """
-    Calcula métricas e colunas derivadas para análise dos servidores.
-    """
-    df = df.dropna(subset=['data_conclusao_servidor']).copy()
-    if df.empty:
-        return df
-        
-    # Duração: respeita tipo de contagem (dias úteis vs corridos) e suspensões manuais
-    # Alinhado com relatorios.py linhas 256-273
-    df['duracao_servidor'] = df.apply(
-        lambda row: (
-            max(0, utils.calculate_net_work_days(
-                row['data_atribuicao_servidor'].date(),
-                row['data_conclusao_servidor'].date(),
-                row['id_servidor_responsavel']
-            ) - row.get('prazo_total_dias_suspenso', 0))
-            if row.get('tipo_contagem_prazo') == 'dias uteis'
-            else utils.calculate_net_duration_calendar(
-                row['data_atribuicao_servidor'].date(),
-                row['data_conclusao_servidor'].date(),
-                row['id_servidor_responsavel'],
-                row.get('prazo_total_dias_suspenso', 0)
-            )
-        ), axis=1
+# Helper function definition needed for calculation
+def calculate_due_date_safe(row):
+    return calculate_due_date(
+        start_date=row['data_atribuicao_servidor'].date(),
+        prazo_dias=row['prazo_servidor_aplicado'],
+        tipo_contagem=row['tipo_contagem_prazo'],
+        id_usuario=row['id_servidor_responsavel'],
+        dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
     )
 
-    # Data-limite: calculate_due_date já lida internamente com afastamentos
-    # Alinhado com relatorios.py linhas 274-276
-    df['data_final_teorica'] = df.apply(
-        lambda row: utils.calculate_due_date(
-            start_date=row['data_atribuicao_servidor'].date(),
-            prazo_dias=row['prazo_servidor_aplicado'],
-            tipo_contagem=row['tipo_contagem_prazo'],
-            id_usuario=row['id_servidor_responsavel'],
-            dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
-        ), axis=1
-    )
-    
-    df['no_prazo_servidor'] = df['data_conclusao_servidor'].dt.date <= df['data_final_teorica']
-    
-    return df
+# --- Guarda de Autenticação ---
+auth.auth_guard()
 
-def calculate_metrics_chefe(df):
-    """
-    Calcula métricas e colunas derivadas para análise dos chefes.
-    """
-    df = df.dropna(subset=['data_conclusao_chefe', 'data_conclusao_servidor']).copy()
-    if df.empty:
-        return df
-        
-    # Duração revisão: respeita tipo de contagem e suspensões manuais
-    # Alinhado com relatorios.py linhas 282-298
-    df['duracao_revisao_chefe'] = df.apply(
-        lambda row: (
-            max(0, utils.calculate_net_work_days(
-                row['data_conclusao_servidor'].date(),
-                row['data_conclusao_chefe'].date(),
-                row['id_chefe_gabinete']
-            ) - row.get('prazo_total_dias_suspenso', 0))
-            if row.get('tipo_contagem_prazo') == 'dias uteis'
-            else utils.calculate_net_duration_calendar(
-                row['data_conclusao_servidor'].date(),
-                row['data_conclusao_chefe'].date(),
-                row['id_chefe_gabinete'],
-                row.get('prazo_total_dias_suspenso', 0)
-            )
-        ), axis=1
-    )
-    
-    # Data-limite revisão: calculate_due_date já lida internamente com afastamentos
-    # Alinhado com relatorios.py linhas 300-302
-    df['data_final_revisao_teorica'] = df.apply(
-        lambda row: utils.calculate_due_date(
-            start_date=row['data_conclusao_servidor'].date(),
-            prazo_dias=row['prazo_chefe_aplicado'],
-            tipo_contagem=row['tipo_contagem_prazo'],
-            id_usuario=row['id_chefe_gabinete'],
-            dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
-        ), axis=1
-    )
-    
-    df['revisao_no_prazo'] = df['data_conclusao_chefe'].dt.date <= df['data_final_revisao_teorica']
-    
-    return df
+# --- Cláusula de Guarda de Perfil ---
+allowed_profiles = ["Chefe de Gabinete", "Procurador", "Administrador"]
+current_profile = st.session_state.get("active_perfil")
 
-def calculate_acervo_snapshot(df, data_ref_ts):
-    """
-    Calcula o estado do acervo em uma data de referência específica.
-    Alinhado com relatorios.py Métricas 4 e 8:
-    - Exclui processos que pulam etapas
-    - Inclui processos devolvidos
-    """
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()
+if current_profile not in allowed_profiles:
+    st.error("🚫 Acesso restrito a Chefes de Gabinete e Procuradores.")
+    st.stop()
+
+st.set_page_config(
+    page_title="Gabinete em Números - MPC/SC",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Carregar CSS do sistema
+ui_utils.load_css()
+
+# CSS customizado para a página (reutilizando Meus_Dados.py)
+st.markdown('''
+<style>
+    /* Estilos reutilizados de Meus_Dados.py */
+    [data-testid="stMetric"] {
+        background: linear-gradient(145deg, #ffffff, #f8f9fa);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border-left: 4px solid #9E0520;
+        transition: all 0.3s ease;
+    }
+    
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(158, 5, 32, 0.15);
+    }
+    
+    .section-title {
+        background: linear-gradient(90deg, #9E0520, transparent);
+        padding: 12px 20px;
+        border-radius: 10px;
+        color: white;
+        font-weight: 600;
+        font-size: 1.2em;
+        margin: 25px 0 15px 0;
+    }
+    
+    [data-testid="stPlotlyChart"] {
+        background: white;
+        border-radius: 15px;
+        padding: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    /* Loading Screen Animation */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.98); }
+    }
+    
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 20px;
+        margin: 20px 0;
+    }
+    
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #9E0520;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+''', unsafe_allow_html=True)
+
+st.session_state.active_page = "Gabinete em Números"
+build_sidebar()
+
+# --- Header Principal ---
+st.markdown('''
+<div style="background: linear-gradient(135deg, #9E0520 0%, #B8062A 100%); color: white; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 8px 30px rgba(158, 5, 32, 0.35);">
+    <h1 style="margin: 0; font-size: 2.4em; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">📊 Gabinete em Números</h1>
+    <p style="margin: 12px 0 0 0; font-size: 1.15em; opacity: 0.95; font-weight: 400;">Visão consolidada de produtividade e carga de trabalho do gabinete</p>
+</div>
+''', unsafe_allow_html=True)
+
+# --- Placeholder para Loading ---
+loading_placeholder = st.empty()
+
+# --- Identificação do Contexto (Hierarquia) ---
+current_user_id = st.session_state.user_id
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_gabinete_context(user_id, profile, admin_target_id=None):
+    """Identifica o Procurador alvo e todos os membros do gabinete."""
+    target_procurador_id = None
+    
+    if profile == "Procurador":
+        target_procurador_id = user_id
+    elif profile == "Chefe de Gabinete":
+        # Buscar procurador vinculado
+        link = QueryBuilder("procurador_chefes").eq("chefe_id", user_id).execute()
+        if link:
+            target_procurador_id = link[0]['procurador_id']
+    elif profile == "Administrador" and admin_target_id:
+        target_procurador_id = admin_target_id
+    
+    if not target_procurador_id:
+        return None, [], []
         
-    # Acervo Servidores (Métrica 4 do relatório)
-    acervo_serv = df[
-        # Base: servidor recebeu até a data de referência
-        (df['data_atribuicao_servidor'] <= data_ref_ts) &
-        # Excluir processos que pulam a fase do servidor
-        (~df['nao_se_aplica_prazo_servidor'].fillna(False).astype(bool)) &
-        (
-            # Caso normal: processo não concluído pelo servidor
-            (
-                (
-                    (df['data_conclusao_servidor'].isna()) |
-                    (df['data_conclusao_servidor'] > data_ref_ts)
-                ) &
-                (df['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo']))
-            )
-            |
-            # Caso devolvido: processo voltou para o servidor
-            (df['status_servidor'] == 'Devolvido')
+    # Buscar todos os chefes vinculados a este procurador
+    chefes_links = QueryBuilder("procurador_chefes").eq("procurador_id", target_procurador_id).execute()
+    chefes_ids = [c['chefe_id'] for c in chefes_links]
+    
+    # Buscar todos os servidores vinculados a estes chefes (ou diretamente ao gabinete se houver outra tabela, 
+    # mas assumiremos a estrutura hierárquica via chefe->servidores ou todos do gabinete)
+    # Estrutura comum: Procurador -> Chefes -> Servidores
+    # Mas também precisamos pegar processos diretamente atribuídos
+    
+    # Vamos buscar TODOS os usuários e filtrar depois para garantir consistência
+    all_users = get_all_users()
+    
+    # Filtrar membros relevantes
+    # (Opcional: Refinar essa busca se o banco for muito grande)
+    
+    return target_procurador_id, chefes_ids, all_users
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_gabinete_data(procurador_id):
+    """Carrega dados de processos para todo o gabinete do procurador."""
+    if not procurador_id:
+        return [], []
+        
+    # Buscar processos onde o procurador é o dono do gabinete
+    # A tabela processos tem 'id_procurador' - isso facilita muito!
+    # Não precisamos reconstruir a hierarquia complexa para buscar os processos, basta filtrar pelo id_procurador.
+    
+    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_procurador,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,data_finalizacao,prazo_servidor_aplicado,prazo_chefe_aplicado,prazo_total_dias_suspenso,nao_se_aplica_prazo_servidor,ignorar_revisao_chefe,ignorar_analise_procurador,processo_numero"
+    
+    processos = QueryBuilder("processos") \
+        .eq("id_procurador", procurador_id) \
+        .select(processos_cols) \
+        .execute()
+        
+    tipos = QueryBuilder("tipos_produto") \
+        .select("id,nome_produto,tipo_contagem_prazo") \
+        .execute()
+        
+    return processos, tipos
+
+# Mostrar loading
+loading_placeholder.markdown('''
+<div class="loading-container">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">🔄 Consolidando dados do gabinete...</div>
+</div>
+''', unsafe_allow_html=True)
+
+# Executar cargas
+admin_target = None
+if current_profile == "Administrador":
+    # Buscar lista de procuradores para o admin selecionar
+    all_users_temp = get_all_users()
+    procuradores_opts = {u['nome_completo']: u['id'] for u in all_users_temp if u['perfil'] == 'Procurador'}
+    
+    if not procuradores_opts:
+        st.error("Nenhum procurador encontrado no sistema.")
+        st.stop()
+        
+    selected_proc_name = st.selectbox(
+        "👮‍♂️ [Modo Admin] Selecione o Gabinete para Visualizar:", 
+        options=list(procuradores_opts.keys())
+    )
+    admin_target = procuradores_opts[selected_proc_name]
+
+target_procurador_id, chefes_ids, all_users_list = get_gabinete_context(current_user_id, current_profile, admin_target)
+
+if not target_procurador_id:
+    loading_placeholder.empty()
+    st.error("Não foi possível identificar o gabinete vinculado. Contate o suporte.")
+    st.stop()
+
+raw_processos, raw_tipos = load_gabinete_data(target_procurador_id)
+
+loading_placeholder.empty()
+
+if not raw_processos:
+    st.info("Nenhum processo encontrado para este gabinete.")
+    st.stop()
+
+# --- Preparação dos Dados ---
+usuarios_dict = {u['id']: u for u in all_users_list}
+tipos_dict = {t['id']: t for t in raw_tipos}
+
+df_master = prepare_master_dataframe(raw_processos, usuarios_dict, tipos_dict)
+
+# Métrica segura: garantir que colunas numéricas não tenham NaN
+cols_numericas = ['prazo_total_dias_suspenso', 'prazo_servidor_aplicado', 'prazo_chefe_aplicado']
+for col in cols_numericas:
+    if col in df_master.columns:
+        df_master[col] = df_master[col].fillna(0)
+
+# --- Filtros ---
+st.markdown("### 🎯 Filtros do Gabinete")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    hoje = today_brazil()
+    data_inicio_padrao = date(2024, 1, 1)
+    data_fim_padrao = date(hoje.year, 12, 31)
+    
+    f_ini = st.date_input("📅 Data Início", value=data_inicio_padrao, format="DD/MM/YYYY")
+
+with col2:
+    f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
+
+with col3:
+    tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
+    filtro_tipos = st.multiselect("📝 Tipo de Processo", options=tipos_unicos)
+
+# --- Filtragem Base (por data de conclusão ou movimentação) ---
+# Para KPIs gerais, consideramos o período selecionado.
+# Regra: data_conclusao dentro do período OU data_atribuicao (para entrada)
+
+# Vamos criar um DF filtrado para "Concluídos no Período" (Métricas de produtividade)
+df_servidor_calc = calculate_metrics_servidor(df_master)
+df_chefe_calc = calculate_metrics_chefe(df_master)
+
+# Filtrar para exibir estatísticas
+# Se o usuário selecionar um tipo, filtra tudo
+if filtro_tipos:
+    df_master = df_master[df_master['nome_produto'].isin(filtro_tipos)]
+    df_servidor_calc = df_servidor_calc[df_servidor_calc['nome_produto'].isin(filtro_tipos)]
+    df_chefe_calc = df_chefe_calc[df_chefe_calc['nome_produto'].isin(filtro_tipos)]
+
+# Filtro de Data para Métricas de Fluxo (Conclusões)
+df_concluidos_servidor = df_servidor_calc[
+    (df_servidor_calc['data_conclusao_servidor'].dt.date >= f_ini) &
+    (df_servidor_calc['data_conclusao_servidor'].dt.date <= f_fim)
+]
+
+df_concluidos_chefe = df_chefe_calc[
+    (df_chefe_calc['data_conclusao_chefe'].dt.date >= f_ini) &
+    (df_chefe_calc['data_conclusao_chefe'].dt.date <= f_fim)
+]
+
+# Processos Finalizados (Pelo Procurador) - Usando data_finalizacao
+df_master['data_finalizacao'] = pd.to_datetime(df_master['data_finalizacao'], errors='coerce')
+df_finalizados = df_master[
+    (df_master['data_finalizacao'].dt.date >= f_ini) &
+    (df_master['data_finalizacao'].dt.date <= f_fim)
+]
+
+# --- Cálculo dos KPIs ---
+
+# 1. Processos Registrados (Total no banco para este gabinete, independente de filtro de data de conclusão?)
+# O pedido diz: "Processos Registrados no Gabinete". Geralmente refere-se à entrada no período ou total da base.
+# Vamos assumir "Entrada no período" para ser consistente com o filtro de data (Atribuídos ao servidor no período).
+df_entradas = df_master[
+    (df_master['data_atribuicao_servidor'].dt.date >= f_ini) &
+    (df_master['data_atribuicao_servidor'].dt.date <= f_fim)
+]
+kpi_registrados = len(df_entradas)
+
+# 2. Concluídos Servidores
+kpi_conc_serv = len(df_concluidos_servidor)
+
+# 3. Revisados Chefe
+kpi_rev_chefe = len(df_concluidos_chefe)
+
+# 4. Aprovados Procurador
+kpi_aprov_proc = len(df_finalizados)
+
+# 5. Acervo Total (Em Aberto AGORA)
+# Calcular Snapshot AGORA para o KPI de topo
+now_ts = pd.Timestamp.now()
+acervo_s_now, acervo_c_now = calculate_acervo_snapshot(df_master, now_ts)
+kpi_acervo_total = len(acervo_s_now) + len(acervo_c_now)
+
+# 5. No Prazo Servidores (%)
+pct_prazo_serv = (df_concluidos_servidor['no_prazo_servidor'].sum() / kpi_conc_serv * 100) if kpi_conc_serv > 0 else 0
+
+# 6. Percentual Prazo Chefe (Substituindo Qtd Servidores)
+# Conta processos concluídos pelo chefe dentro do prazo
+# A coluna calculada em calculate_metrics_chefe é 'revisao_no_prazo'
+pct_prazo_chefe = (df_concluidos_chefe['revisao_no_prazo'].sum() / kpi_rev_chefe * 100) if kpi_rev_chefe > 0 else 0
+
+# 7. Tempo Médio Servidores
+tm_serv = df_concluidos_servidor['duracao_servidor'].mean() if not df_concluidos_servidor.empty else 0
+
+# 8. Tempo Médio Chefes
+tm_chefe = df_concluidos_chefe['duracao_revisao_chefe'].mean() if not df_concluidos_chefe.empty else 0
+
+
+st.markdown("### 📈 KPIs do Gabinete")
+
+# Grid 3x3
+k1, k2, k3 = st.columns(3)
+k4, k5, k6 = st.columns(3)
+k7, k8, k9 = st.columns(3)
+
+with k1: st.metric("📥 Processos Registrados (Entradas)", kpi_registrados, help="Processos atribuídos aos servidores neste período")
+with k2: st.metric("✅ Concluídos por Servidores", kpi_conc_serv)
+with k3: st.metric("👀 Processos Revisados (Chefes)", kpi_rev_chefe)
+
+with k4: st.metric("⚖️ Aprovados pelo Procurador", kpi_aprov_proc, help="Processos finalizados pelo Procurador")
+with k5: st.metric("📂 Acervo Total em Tramitação", kpi_acervo_total, help="Total de processos ativos (Servidores + Chefes) agora")
+with k6: st.metric("🎯 % Revisão no Prazo (Chefes)", f"{pct_prazo_chefe:.1f}%")
+
+with k7: st.metric("⏱️ Tempo Médio (Servidores)", f"{tm_serv:.1f} dias")
+with k8: st.metric("⏱️ Tempo Médio de Revisão (Chefes)", f"{tm_chefe:.1f} dias")
+with k9: st.metric("🎯 % Conclusão no Prazo (Serv)", f"{pct_prazo_serv:.1f}%")
+
+st.markdown("---")
+
+# --- Gráficos Detalhados por Servidor ---
+
+# Preparar dados agrupados por servidor
+if not df_concluidos_servidor.empty:
+    grp_serv = df_concluidos_servidor.groupby('servidor_nome').agg(
+        concluidos=('id', 'count'),
+        no_prazo=('no_prazo_servidor', 'sum'),
+        tempo_medio=('duracao_servidor', 'mean')
+    ).reset_index()
+    
+    grp_serv['pct_prazo'] = (grp_serv['no_prazo'] / grp_serv['concluidos'] * 100).fillna(0)
+    
+    # 1) Processos concluídos por servidor (+ % prazo)
+    c_g1, c_g2 = st.columns(2)
+    
+    with c_g1:
+        st.markdown("#### 🏆 Produtividade por Servidor")
+        fig1 = px.bar(
+            grp_serv, x='concluidos', y='servidor_nome', orientation='h',
+            text='concluidos',
+            color='pct_prazo', color_continuous_scale='RdYlGn', range_color=[0, 100],
+            labels={'concluidos': 'Processos Concluídos', 'servidor_nome': 'Servidor', 'pct_prazo': '% no Prazo'}
         )
-    ].copy()
-    
-    # Acervo Chefe (Métrica 8 do relatório)
-    acervo_chefe = df[
-        # Base: servidor concluiu até a data de referência
-        (df['data_conclusao_servidor'].notna()) &
-        (df['data_conclusao_servidor'] <= data_ref_ts) &
-        # Excluir processos que pulam a fase do chefe
-        (~df['ignorar_revisao_chefe'].fillna(False).astype(bool)) &
-        (
-            # Caso normal: chefe ainda não revisou
-            (
-                (df['data_conclusao_chefe'].isna()) |
-                (df['data_conclusao_chefe'] > data_ref_ts)
-            )
-            |
-            # Caso devolvido pelo procurador: voltou para o chefe
-            (df['status_chefe'] == 'Devolvido')
+        fig1.update_traces(textposition='outside')
+        fig1.update_layout(yaxis={'categoryorder': 'total ascending'}, plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig1, width="stretch")
+        
+    # 2) Tempo Médio por Servidor
+    with c_g2:
+        st.markdown("#### ⏱️ Tempo Médio por Servidor")
+        fig2 = px.bar(
+            grp_serv, x='tempo_medio', y='servidor_nome', orientation='h',
+            text=grp_serv['tempo_medio'].apply(lambda x: f"{x:.1f} dias"),
+            color='tempo_medio', color_continuous_scale='Reds', # Vermelho pois maior tempo é pior
+            labels={'tempo_medio': 'Tempo Médio (Dias)', 'servidor_nome': 'Servidor'}
         )
-    ].copy()
-    
-    return acervo_serv, acervo_chefe
+        fig2.update_traces(textposition='outside')
+        fig2.update_layout(yaxis={'categoryorder': 'total descending'}, plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig2, width="stretch")
 
-def prepare_devolucoes_dataframe(historico_data, usuarios_dict):
-    """
-    Processa dados históricos de devoluções.
-    """
-    if not historico_data:
-        return pd.DataFrame()
-        
-    df = pd.DataFrame(historico_data)
+    # 3) Distribuição Detalhada (Concluido vs Acervo)
+    st.markdown("#### 📊 Processos Distribuídos por Servidor")
     
-    # Tenta mapear nomes, se as colunas de ID existirem no histórico ou precisar join manual
-    # O histórico geralmente tem id_processo. Vamos assumir que recebemos dados já enriquecidos ou faremos join simples
-    # Nesse caso, vamos simplificar assumindo que precisamos das contagens
+    # Calcular Acervo Atual por Servidor (para o gráfico)
+    # Acervo atual já calculado em df_acervo_atual_serv -> precisamos agrupar
+    # Se df_acervo_atual_serv não estiver vazio:
     
-    # Se o histórico vier raw, ele tem 'id_processo', precisamos saber quem era o responsável na época?
-    # Geralmente a análise é "quantas devoluções ocorreram".
+    # Snapshot AGORA para o gráfico (já calculado para o KPI lá em cima, mas vamos garantir o DF completo)
+    # df_acervo_atual_serv (calculated below, lets move calculation up or reuse logic)
+    # The code structured calculating it later. Lets calculate it here or rely on kpi logic
+    # Reusing the KPI logic `acervo_s_now` from line 305 replacement
     
-    # Vamos assumir que a view principal vai passar os dados filtrados
-    return df
+    df_chart_acervo = acervo_s_now.groupby('servidor_nome').size().reset_index(name='Em Aberto')
+    df_chart_concluidos = grp_serv[['servidor_nome', 'concluidos']].rename(columns={'concluidos': 'Concluídos'})
+    
+    # Merge
+    df_dist = pd.merge(df_chart_concluidos, df_chart_acervo, on='servidor_nome', how='outer').fillna(0)
+    df_dist['Total'] = df_dist['Concluídos'] + df_dist['Em Aberto']
+    df_dist = df_dist.sort_values('Total', ascending=True)
+    
+    # Transformar para formato longo para gráfico empilhado
+    df_dist_long = df_dist.melt(id_vars=['servidor_nome', 'Total'], value_vars=['Concluídos', 'Em Aberto'], 
+                                var_name='Estado', value_name='Quantidade')
+    
+    fig3 = px.bar(
+        df_dist_long, 
+        y='servidor_nome', 
+        x='Quantidade', 
+        color='Estado',
+        orientation='h',
+        text='Quantidade',
+        color_discrete_map={'Concluídos': '#28a745', 'Em Aberto': '#dc3545'},
+        labels={'servidor_nome': 'Servidor', 'Quantidade': 'Processos', 'Estado': 'Situação'}
+    )
+    fig3.update_traces(textposition='inside')
+    fig3.update_layout(
+        barmode='stack', 
+        plot_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    # Adicionar totais ao final da barra
+    fig3.add_trace(go.Scatter(
+        y=df_dist['servidor_nome'],
+        x=df_dist['Total'],
+        text=df_dist['Total'].apply(lambda x: str(int(x))),
+        mode='text',
+        textposition='middle right',
+        showlegend=False,
+        textfont=dict(color='black', size=12)
+    ))
+    
+    # Ajustar ranges para caber o texto do total
+    # Aumentar um pouco o eixo X
+    max_val = df_dist['Total'].max()
+    fig3.update_layout(xaxis_range=[0, max_val * 1.15])
+    
+    st.plotly_chart(fig3, width="stretch")
 
-def create_metric_card(value, label, icon="📊"):
-    return f"""
-    <div class="metric-card">
-        <div class="metric-value">{icon} {value}</div>
-        <div class="metric-label">{label}</div>
-    </div>
-    """
+else:
+    st.info("Sem dados de conclusão de servidores para o período selecionado.")
 
-def format_and_plot(data, chart_type, title, icon="📈", description=""):
-    st.markdown(f'<div class="section-header">{icon} {title}</div>', unsafe_allow_html=True)
-    if description:
-        st.caption(description)
+st.markdown("---")
+
+# --- Acervo Histórico (Mês a Mês) ---
+st.markdown("### 📅 Evolução do Acervo (Estoque)")
+
+# Função para calcular histórico (pode ser pesada, avisar usuário)
+# Vamos calcular snapshots mensais para o ano corrente ou período selecionado
+dates_to_check = pd.date_range(start=f_ini, end=f_fim, freq='ME') # Month End
+
+history_data = []
+
+if len(dates_to_check) > 0:
+    prog_bar = st.progress(0, text="Calculando histórico de acervo...")
+    
+    for i, date_ref in enumerate(dates_to_check):
+        idx = i + 1
+        pct = int(idx / len(dates_to_check) * 100)
+        prog_bar.progress(pct, text=f"Calculando histórico: {date_ref.strftime('%m/%Y')}")
         
-    if isinstance(data, pd.Series):
-        if data.empty:
-            st.info("Sem dados.")
-            return
-        df_display = data.reset_index()
-        df_display.columns = ["Nome", "Valor"]
+        # Calcular snapshot para esta data
+        # Usamos o df_master inteiro (sem filtro de conclusão) para ver o estado nela
+        acervo_s, acervo_c = calculate_acervo_snapshot(df_master, date_ref)
         
-        if chart_type == "Barra":
-            fig = px.bar(
-                df_display, x="Valor", y="Nome", orientation='h', text="Valor",
-                color="Valor", color_continuous_scale='viridis'
+        history_data.append({
+            'data': date_ref,
+            'mes_ano': date_ref.strftime('%b/%Y'),
+            'Acervo Servidores': len(acervo_s),
+            'Acervo Chefes': len(acervo_c)
+        })
+    
+    prog_bar.empty()
+    
+    df_history = pd.DataFrame(history_data)
+    
+    if not df_history.empty:
+        # Gráfico de Linhas Comparativo
+        fig_hist = go.Figure()
+        fig_hist.add_trace(go.Scatter(
+            x=df_history['data'], y=df_history['Acervo Servidores'],
+            mode='lines+markers', name='Com Servidores',
+            line=dict(color='#0D47A1', width=3)
+        ))
+        fig_hist.add_trace(go.Scatter(
+            x=df_history['data'], y=df_history['Acervo Chefes'],
+            mode='lines+markers', name='Com Chefes',
+            line=dict(color='#9E0520', width=3)
+        ))
+        
+        fig_hist.update_layout(
+            title="Evolução do Acervo (Final do Mês)",
+            xaxis_title="Mês",
+            yaxis_title="Processos Pendentes",
+            plot_bgcolor='rgba(0,0,0,0)',
+            hovermode="x unified"
+        )
+        st.plotly_chart(fig_hist, width="stretch")
+else:
+    st.warning("Selecione um intervalo de datas maior para ver a evolução histórica.")
+
+st.markdown("---")
+
+# --- Acervo Atual Detalhado ---
+st.markdown("### 📋 Carga de Trabalho Atual (Em Aberto)")
+
+# Calcular Snapshot AGORA
+now = pd.Timestamp.now()
+# df_acervo_atual_serv foi calculado lá em cima como acervo_s_now, reutilizar
+df_acervo_atual_serv = acervo_s_now
+
+if not df_acervo_atual_serv.empty:
+    # Agrupar por servidor
+    # Métrica 1: Total Acervo
+    # Métrica 2: Atrasados (prazo excedido hoje)
+    
+    # Calcular atraso atual
+    # Precisamos recalcular o prazo para o momento atual para saber se esta atrasado HOJE
+    # A funcao calculate_metrics_servidor ja calcula 'data_final_teorica' e 'no_prazo_servidor' baseado na DATA DE CONCLUSAO
+    # Para processos EM ABERTO, precisamos comparar HOJE com data_final_teorica
+    
+    # Reutilizar logica de prazo
+    df_ativo_calc = df_acervo_atual_serv.copy()
+    
+    # Recalcular data final teorica (garantir que existe)
+    if 'data_final_teorica' not in df_ativo_calc.columns:
+        df_ativo_calc['data_final_teorica'] = df_ativo_calc.apply(
+            lambda row: calculate_due_date_safe(row), axis=1
+        )
+        
+    # Verificar atraso (Hoje > Data Final)
+    hoje_ts = pd.Timestamp(date.today())
+    df_ativo_calc['esta_atrasado'] = df_ativo_calc['data_final_teorica'] < hoje_ts.date()
+    
+    # Agrupar
+    resumo_carga = df_ativo_calc.groupby('servidor_nome').agg(
+        total_acervo=('id', 'count'),
+        total_atrasado=('esta_atrasado', 'sum')
+    ).reset_index().sort_values('total_acervo', ascending=False)
+    
+    resumo_carga.columns = ['Servidor', 'Acervo Total', 'Atrasados']
+    
+    # Tabela de Carga (Com tooltip e sem gráfico lateral)
+    st.dataframe(
+        resumo_carga, 
+        hide_index=True,
+        column_config={
+            "Acervo Total": st.column_config.ProgressColumn(
+                "Total em Aberto",
+                format="%d",
+                min_value=0,
+                max_value=int(resumo_carga['Acervo Total'].max() * 1.2) if not resumo_carga.empty else 100,
+                help="Quantidade total de processos sob responsabilidade do servidor. A barra indica a carga relativa comparada aos demais membros da equipe."
+            ),
+            "Atrasados": st.column_config.NumberColumn(
+                "⚠️ Atrasados",
+                format="%d",
+                help="Processos cujo prazo já expirou."
             )
-            fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, width="stretch", key=title)
-        elif chart_type == "Linha":
-            st.line_chart(data)
-        else:
-            st.area_chart(data)
-            
-        with st.expander("Ver dados"):
-            st.dataframe(df_display, width=1500, hide_index=True)
-            
-    elif isinstance(data, pd.DataFrame):
-        if data.empty:
-            st.info("Sem dados.")
-            return
-            
-        if chart_type == "Barra":
-            # Para visualização temporal agrupada
-            st.bar_chart(data)
-        elif chart_type == "Linha":
-            st.line_chart(data)
-        else:
-            st.area_chart(data)
-            
-        with st.expander("Ver dados"):
-            st.dataframe(data, width=1500)
+        },
+        width="stretch"
+    )
+
+else:
+    st.info("A equipe não possui processos pendentes no momento.")
+
+# --- Metodologia ---
+st.markdown("---")
+with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
+     st.markdown("""
+    ### 📝 Metodologia dos Indicadores
+    
+    Os dados apresentados consolidam as informações de **todo o gabinete** vinculado ao Procurador (incluindo todos os servidores e chefes associados).
+    
+    #### 1. KPIs Principais
+    - **Registrados:** Processos que entraram na fase de servidor (data de atribuição) dentro do período selecionado.
+    - **Concluídos Servidores:** Processos que tiveram a data de conclusão do servidor registrada no período.
+    - **Revisados Chefes:** Processos que tiveram a data de conclusão do chefe registrada no período.
+    - **Aprovados Procurador:** Processos finalizados (arquivados/enviados) no período.
+    
+    #### 2. Tempos e Prazos
+    - **Tempo Médio:** Média de dias úteis ou corridos (conforme tipo do processo) gastos para concluir a etapa, descontando suspensões.
+    - **% No Prazo:** Percentual de processos entregues antes ou na data limite calculada.
+    
+    #### 3. Acervo (Estoque)
+    - **Acervo Servidores:** Processos atualmente com servidores (não concluídos e não devolvidos).
+    - **Acervo Chefes:** Processos concluídos por servidores mas ainda não revisados pelos chefes.
+    - **Atrasados:** Processos cujo prazo calculado já venceu em relação à data de hoje.
+    """)
+
