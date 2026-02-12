@@ -313,6 +313,12 @@ kpi_rev_chefe = len(df_concluidos_chefe)
 # 4. Aprovados Procurador
 kpi_aprov_proc = len(df_finalizados)
 
+# 5. Acervo Total (Em Aberto AGORA)
+# Calcular Snapshot AGORA para o KPI de topo
+now_ts = pd.Timestamp.now()
+acervo_s_now, acervo_c_now = calculate_acervo_snapshot(df_master, now_ts)
+kpi_acervo_total = len(acervo_s_now) + len(acervo_c_now)
+
 # 5. No Prazo Servidores (%)
 pct_prazo_serv = (df_concluidos_servidor['no_prazo_servidor'].sum() / kpi_conc_serv * 100) if kpi_conc_serv > 0 else 0
 
@@ -330,17 +336,22 @@ tm_chefe = df_concluidos_chefe['duracao_revisao_chefe'].mean() if not df_conclui
 
 st.markdown("### 📈 KPIs do Gabinete")
 
-k1, k2, k3, k4 = st.columns(4)
-with k1: st.metric("📥 Registrados (Período)", kpi_registrados, help="Processos atribuídos aos servidores neste período")
-with k2: st.metric("✅ Concl. Servidores", kpi_conc_serv)
-with k3: st.metric("👀 Revisados Chefes", kpi_rev_chefe)
-with k4: st.metric("⚖️ Aprov. Procurador", kpi_aprov_proc, help="Processos finalizados pelo Procurador")
+# Grid 3x3
+k1, k2, k3 = st.columns(3)
+k4, k5, k6 = st.columns(3)
+k7, k8, k9 = st.columns(3)
 
-k5, k6, k7, k8 = st.columns(4)
-with k5: st.metric("👥 Servidores Ativos", qtd_servidores)
-with k6: st.metric("⏱️ T. Médio Servidores", f"{tm_serv:.1f} dias")
-with k7: st.metric("⏱️ T. Médio Chefes", f"{tm_chefe:.1f} dias")
-with k8: st.metric("🎯 % No Prazo (Serv)", f"{pct_prazo_serv:.1f}%")
+with k1: st.metric("📥 Processos Registrados (Entradas)", kpi_registrados, help="Processos atribuídos aos servidores neste período")
+with k2: st.metric("✅ Concluídos por Servidores", kpi_conc_serv)
+with k3: st.metric("👀 Processos Revisados (Chefes)", kpi_rev_chefe)
+
+with k4: st.metric("⚖️ Aprovados pelo Procurador", kpi_aprov_proc, help="Processos finalizados pelo Procurador")
+with k5: st.metric("📂 Acervo Total em Tramitação", kpi_acervo_total, help="Total de processos ativos (Servidores + Chefes) agora")
+with k6: st.metric("👥 Quantidade de Servidores Ativos", qtd_servidores)
+
+with k7: st.metric("⏱️ Tempo Médio (Servidores)", f"{tm_serv:.1f} dias")
+with k8: st.metric("⏱️ Tempo Médio de Revisão (Chefes)", f"{tm_chefe:.1f} dias")
+with k9: st.metric("🎯 % Conclusão no Prazo (Serv)", f"{pct_prazo_serv:.1f}%")
 
 st.markdown("---")
 
@@ -364,7 +375,7 @@ if not df_concluidos_servidor.empty:
         fig1 = px.bar(
             grp_serv, x='concluidos', y='servidor_nome', orientation='h',
             text='concluidos',
-            color='pct_prazo', color_continuous_scale='RdYlGn',
+            color='pct_prazo', color_continuous_scale='RdYlGn', range_color=[0, 100],
             labels={'concluidos': 'Processos Concluídos', 'servidor_nome': 'Servidor', 'pct_prazo': '% no Prazo'}
         )
         fig1.update_traces(textposition='outside')
@@ -384,9 +395,46 @@ if not df_concluidos_servidor.empty:
         fig2.update_layout(yaxis={'categoryorder': 'total descending'}, plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig2, use_container_width=True)
 
-    # 3) Distribuição (Pizza/Pie)
-    st.markdown("#### 🥧 Distribuição de Carga (Concluídos)")
-    fig3 = px.pie(grp_serv, values='concluidos', names='servidor_nome', hole=0.4)
+    # 3) Distribuição Detalhada (Concluido vs Acervo)
+    st.markdown("#### 📊 Processos Distribuídos por Servidor")
+    
+    # Calcular Acervo Atual por Servidor (para o gráfico)
+    # Acervo atual já calculado em df_acervo_atual_serv -> precisamos agrupar
+    # Se df_acervo_atual_serv não estiver vazio:
+    
+    # Snapshot AGORA para o gráfico (já calculado para o KPI lá em cima, mas vamos garantir o DF completo)
+    # df_acervo_atual_serv (calculated below, lets move calculation up or reuse logic)
+    # The code structured calculating it later. Lets calculate it here or rely on kpi logic
+    # Reusing the KPI logic `acervo_s_now` from line 305 replacement
+    
+    df_chart_acervo = acervo_s_now.groupby('servidor_nome').size().reset_index(name='Em Aberto')
+    df_chart_concluidos = grp_serv[['servidor_nome', 'concluidos']].rename(columns={'concluidos': 'Concluídos'})
+    
+    # Merge
+    df_dist = pd.merge(df_chart_concluidos, df_chart_acervo, on='servidor_nome', how='outer').fillna(0)
+    df_dist['Total'] = df_dist['Concluídos'] + df_dist['Em Aberto']
+    df_dist = df_dist.sort_values('Total', ascending=True)
+    
+    # Transformar para formato longo para gráfico empilhado
+    df_dist_long = df_dist.melt(id_vars=['servidor_nome', 'Total'], value_vars=['Concluídos', 'Em Aberto'], 
+                                var_name='Estado', value_name='Quantidade')
+    
+    fig3 = px.bar(
+        df_dist_long, 
+        y='servidor_nome', 
+        x='Quantidade', 
+        color='Estado',
+        orientation='h',
+        text='Quantidade',
+        color_discrete_map={'Concluídos': '#28a745', 'Em Aberto': '#dc3545'},
+        labels={'servidor_nome': 'Servidor', 'Quantidade': 'Processos', 'Estado': 'Situação'}
+    )
+    fig3.update_traces(textposition='inside')
+    fig3.update_layout(
+        barmode='stack', 
+        plot_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     st.plotly_chart(fig3, use_container_width=True)
 
 else:
@@ -458,7 +506,8 @@ st.markdown("### 📋 Carga de Trabalho Atual (Em Aberto)")
 
 # Calcular Snapshot AGORA
 now = pd.Timestamp.now()
-df_acervo_atual_serv, _ = calculate_acervo_snapshot(df_master, now)
+# df_acervo_atual_serv foi calculado lá em cima como acervo_s_now, reutilizar
+df_acervo_atual_serv = acervo_s_now
 
 if not df_acervo_atual_serv.empty:
     # Agrupar por servidor
@@ -491,38 +540,26 @@ if not df_acervo_atual_serv.empty:
     
     resumo_carga.columns = ['Servidor', 'Acervo Total', 'Atrasados']
     
-    col_t1, col_t2 = st.columns([2, 1])
-    
-    with col_t1:
-        st.dataframe(
-            resumo_carga, 
-            hide_index=True,
-            column_config={
-                "Acervo Total": st.column_config.ProgressColumn(
-                    "Total em Aberto",
-                    format="%d",
-                    min_value=0,
-                    max_value=int(resumo_carga['Acervo Total'].max() * 1.2) if not resumo_carga.empty else 100,
-                ),
-                "Atrasados": st.column_config.NumberColumn(
-                    "⚠️ Atrasados",
-                    format="%d"
-                )
-            },
-            use_container_width=True
-        )
-        
-    with col_t2:
-        # Gráfico rápido de atrasados
-        if resumo_carga['Atrasados'].sum() > 0:
-            fig_atraso = px.bar(
-                resumo_carga, x='Servidor', y='Atrasados',
-                title="Processos Atrasados por Servidor",
-                color='Atrasados', color_continuous_scale='Reds'
+    # Tabela de Carga (Com tooltip e sem gráfico lateral)
+    st.dataframe(
+        resumo_carga, 
+        hide_index=True,
+        column_config={
+            "Acervo Total": st.column_config.ProgressColumn(
+                "Total em Aberto",
+                format="%d",
+                min_value=0,
+                max_value=int(resumo_carga['Acervo Total'].max() * 1.2) if not resumo_carga.empty else 100,
+                help="Quantidade total de processos sob responsabilidade do servidor. A barra indica a carga relativa comparada aos demais membros da equipe."
+            ),
+            "Atrasados": st.column_config.NumberColumn(
+                "⚠️ Atrasados",
+                format="%d",
+                help="Processos cujo prazo já expirou."
             )
-            st.plotly_chart(fig_atraso, use_container_width=True)
-        else:
-            st.success("🎉 Nenhum processo atrasado na equipe!")
+        },
+        use_container_width=True
+    )
 
 else:
     st.info("A equipe não possui processos pendentes no momento.")
