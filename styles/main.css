@@ -1,0 +1,195 @@
+/* =========================================================
+   VARIAVEIS GLOBAIS E CORES DO SISTEMA
+   Baseado no "Design Profissional" e Pantone Oficial
+   ========================================================= */
+:root {
+    /* Cores Principais (MPC/SC) */
+    --primary-color: #9E0520;       /* Pantone 187 C */
+    --primary-hover: #7e051a;
+    --secondary-color: #9CAFAA;     /* Cinza/Verde Secundário */
+    --alternative-bg: #4C4D4F;      /* Cinza Escuro */
+    
+    /* Backgrounds */
+    --background-color: #E9E3DF;    /* Bege Claro fundo geral */
+    --card-bg: #FFFFFF;             /* Fundo dos cards */
+    --sidebar-bg: #F2F2F3;
+    
+    /* Texto */
+    --text-color: #000000;
+    --text-secondary: #666666;
+    --text-white: #FFFFFF;
+    
+    /* Bordas e Sombras */
+    --border-radius-lg: 14px;
+    --border-radius-md: 10px;
+    --border-radius-sm: 8px;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.1);
+    --shadow-hover: 0 6px 20px rgba(158, 5, 32, 0.15);
+}
+
+/* =========================================================
+   ELEMENTOS GERAIS
+   ========================================================= */
+
+/* Contêiner Geral */
+.block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+}
+
+/* Títulos */
+h1.main-title {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+p.subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--secondary-color);
+    padding-bottom: 0.5rem;
+}
+
+/* Cards (Contêineres padronizados) */
+.card-container, .metric-card, .info-card {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius-md);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(0,0,0,0.05);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.card-container:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+}
+
+/* =========================================================
+   ELEMENTOS STREAMLIT CUSTOMIZADOS
+   ========================================================= */
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: var(--sidebar-bg);
+}
+
+/* Botões Primários */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #B91E3A 100%);
+    color: var(--text-white);
+    border: none;
+    border-radius: var(--border-radius-md);
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 4px 12px rgba(158, 5, 32, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Botões Secundários */
+.stButton > button[kind="secondary"] {
+    background: white;
+    border: 1px solid var(--secondary-color);
+    color: var(--text-color);
+    border-radius: var(--border-radius-md);
+}
+
+.stButton > button[kind="secondary"]:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: #FFF1F3;
+}
+
+/* Inputs e Selects */
+.stTextInput > div > div > input,
+.stSelectbox > div > div > div,
+.stDateInput > div > div > input {
+    border-radius: var(--border-radius-sm);
+    border-color: #E0E0E0;
+}
+
+.stTextInput > div > div > input:focus,
+.stSelectbox > div > div > div:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background-color: transparent;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 50px;
+    border-radius: var(--border-radius-md);
+    background-color: white;
+    border: 1px solid #E0E0E0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: var(--primary-color);
+    color: white !important;
+    border: none;
+    box-shadow: var(--shadow-md);
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background-color: white;
+    border-radius: var(--border-radius-md);
+    border: 1px solid #F0F0F0;
+}
+
+/* Tabelas (Dataframes) */
+div[data-testid="stDataFrame"] {
+    border: 1px solid #E0E0E0;
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
+
+thead tr th {
+    background-color: var(--secondary-color) !important;
+    color: white !important;
+}
+
+/* =========================================================
+   NAVEGAÇÃO E MENUS
+   ========================================================= */
+
+/* Links de Navegação (Estilo botão) */
+a.nav-link {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: var(--border-radius-sm);
+    transition: background-color 0.2s;
+}
+
+a.nav-link:hover {
+    background-color: #E0E0E0;
+    color: var(--primary-color);
+}
+
+a.nav-link.active {
+    background-color: var(--primary-color);
+    color: white;
+}
