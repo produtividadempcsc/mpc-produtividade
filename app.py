@@ -14,10 +14,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- WORKER EM BACKGROUND (STREAMLIT CLOUD) ---
-from utils.worker_manager import start_background_worker
-# Inicia os jobs em background (apenas uma vez devido ao @st.cache_resource)
-start_background_worker()
+# --- WORKER EM BACKGROUND (DESATIVADO) ---
+# Os jobs foram migrados para Supabase Edge Functions + pg_cron.
+# update-statuses: a cada 1h | notify-deadlines: 08:00 | auto-backup: 23:00
+# NÃO é necessário iniciar scheduler aqui.
 
 # CSS Profissional para o Sistema MPC/SC
 def apply_professional_styling():
