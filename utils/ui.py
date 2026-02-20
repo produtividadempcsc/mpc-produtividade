@@ -398,8 +398,12 @@ def display_process_history(processo, db=None):
     """
     Exibe a timeline visual de histórico de um processo com CSS estilizado.
     """
-    import ui_utils
-    ui_utils.load_css("styles/timeline.css")
+    # Ler CSS para inline (st.html renderiza em iframe isolado)
+    css_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "styles", "timeline.css")
+    timeline_css = ""
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            timeline_css = f.read()
     
     # Helper polyfill
     def get_val(obj, attr, default=None):
@@ -457,7 +461,7 @@ def display_process_history(processo, db=None):
         </div>
     </div>
     """
-    st.markdown(stepper_html, unsafe_allow_html=True)
+    st.html(f"<style>{timeline_css}</style>{stepper_html}")
     
     # ── Coletar Eventos ──
     timeline_events = []
@@ -677,4 +681,5 @@ def display_process_history(processo, db=None):
     
     html_parts.append('</div>')
     
-    st.markdown('\n'.join(html_parts), unsafe_allow_html=True)
+    full_html = f"<style>{timeline_css}</style>" + '\n'.join(html_parts)
+    st.html(full_html)
