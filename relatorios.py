@@ -810,7 +810,8 @@ def gerar_relatorio_pdf(metricas: dict, mes: int, ano: int) -> bytes:
         titulo  = titulos_curtos.get(prefixo, chave.split(')')[0].strip() if ')' in chave else chave[:80])
         pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {})
 
-    return bytes(pdf.output())
+    output = pdf.output(dest='S')
+    return output.encode('latin-1') if isinstance(output, str) else output
 
 
 # ============================================================
@@ -1002,7 +1003,8 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
         titulo = titulos_curtos.get(prefixo, chave.split(')')[0].strip() if ')' in chave else chave[:80])
         pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {})
 
-    return bytes(pdf.output())
+    output = pdf.output(dest='S')
+    return output.encode('latin-1') if isinstance(output, str) else output
 
 
 def gerar_relatorio_lote_zip(ano: int, meses: list = None) -> bytes:
