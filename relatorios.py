@@ -691,8 +691,8 @@ class PDFRelatorio(FPDF):
         # --- Linha separadora ---
         self.set_draw_color(*_COR_AZUL)
         self.set_line_width(0.6)
-        self.line(18, 30, self.w - 18, 30)
-        self.ln(6)
+        self.line(18, 32, self.w - 18, 32)
+        self.ln(10)
         self.set_line_width(0.2)
         self.set_draw_color(*_COR_BORDA)
 
@@ -756,7 +756,7 @@ def gerar_relatorio_pdf(metricas: dict, mes: int, ano: int) -> bytes:
     mes_nome       = MESES_NOME.get(mes, str(mes))
     periodo        = f'{mes_nome}/{ano}'
     data_geracao   = datetime.now().strftime('%d/%m/%Y %H:%M')
-    titulo_top     = f'Relatório Mensal de Produtividade — {periodo}'
+    titulo_top     = f'Relat\u00f3rio Mensal de Produtividade - {periodo}'
 
     pdf = PDFRelatorio(titulo_cabecalho=titulo_top, orientation='P', unit='mm', format='A4')
     pdf.alias_nb_pages()
@@ -952,7 +952,7 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
     """Gera o relatório de produtividade para um período consolidado em PDF."""
     periodo = f'{nome_periodo}/{ano}'
     data_geracao = datetime.now().strftime('%d/%m/%Y %H:%M')
-    titulo_top = f'Relatório de Produtividade — {periodo}'
+    titulo_top = f'Relat\u00f3rio de Produtividade - {periodo}'
 
     pdf = PDFRelatorio(titulo_cabecalho=titulo_top, orientation='P', unit='mm', format='A4')
     pdf.alias_nb_pages()
@@ -961,7 +961,7 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
     # --- Bloco de informações ---
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(*_COR_AZUL)
-    pdf.cell(0, 8, sanitize_text(f'RELATÓRIO DE PRODUTIVIDADE — {nome_periodo.upper()}'), ln=True, align='C')
+    pdf.cell(0, 8, sanitize_text(f'RELAT\u00d3RIO DE PRODUTIVIDADE - {nome_periodo.upper()}'), ln=True, align='C')
     pdf.ln(1)
 
     pdf.set_font('Arial', '', 9)
