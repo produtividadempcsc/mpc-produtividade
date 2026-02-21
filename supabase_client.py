@@ -468,6 +468,14 @@ class QueryBuilder:
                     query = query.lt(column, value)
                 elif filter_type == "lte":
                     query = query.lte(column, value)
+                elif filter_type == "like":
+                    query = query.like(column, value)
+                elif filter_type == "ilike":
+                    query = query.ilike(column, value)
+                elif filter_type == "is":
+                    query = query.is_(column, value)
+                elif filter_type == "not.is":
+                    query = query.not_.is_(column, value)
                 elif filter_type == "in":
                     query = query.in_(column, value)
             
