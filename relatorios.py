@@ -536,20 +536,6 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
         procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names
     }
 
-    # 9) Acervo com Procurador (Snapshot)
-    m9_df = df_full[
-        (df_full['data_conclusao_chefe'] <= report_cutoff_dt) &
-        (~df_full['ignorar_analise_procurador'].fillna(False).astype(bool)) &
-        (
-            (df_full['data_finalizacao'].isnull()) |
-            (df_full['data_finalizacao'] > report_cutoff_dt)
-        )
-    ]
-    m9 = m9_df.groupby('id_procurador').size()
-    metricas["9) Acervo de processo revisados pelo chefe de gabinete que estão com o procurador (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m9.items() if pid in procurador_names
-    }
-
     return metricas
 
 
@@ -791,7 +777,6 @@ def gerar_relatorio_pdf(metricas: dict, mes: int, ano: int) -> bytes:
         "6)": "Média de dias para o Chefe finalizar a revisão (por procurador)",
         "7)": "Percentual de revisões pelo Chefe concluídas no prazo",
         "8)": "Acervo não revisado pelo Chefe ao encerrar o mês",
-        "9)": "Acervo com o Procurador após revisão do Chefe",
     }
 
     for numero, (chave, dados) in enumerate(sorted(metricas.items()), start=1):
@@ -986,7 +971,6 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
         "6)": "Média de dias para o Chefe finalizar a revisão (por procurador)",
         "7)": "Percentual de revisões pelo Chefe concluídas no prazo",
         "8)": "Acervo não revisado pelo Chefe ao encerrar o período",
-        "9)": "Acervo com o Procurador após revisão do Chefe",
     }
 
     for numero, (chave, dados) in enumerate(sorted(metricas.items()), start=1):
