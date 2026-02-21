@@ -7,32 +7,21 @@ import zipfile
 from fpdf import FPDF
 from supabase_client import QueryBuilder, select_all
 from db_compat import get_all_users
-import db_compat as utils
+from repositories.calendar_repository import get_all_holidays
+from repositories.afastamento_repository import get_all_leave_dates_by_user
+from services.prazo_service import (
+    calculate_due_date_batch,
+    calculate_net_work_days_batch,
+    calculate_net_duration_calendar_batch,
+)
 
 def get_available_years():
     """
-    Busca no banco de dados todos os anos únicos em que processos foram atribuídos.
+    Retorna anos disponíveis para relatórios.
+    Gera dinamicamente de 2024 até o ano corrente, em ordem decrescente.
     """
-    try:
-        # Fetch all processes with data_atribuicao_servidor
-        all_processes = select_all("processos")
-        years = set()
-        for p in all_processes:
-            data_str = p.get('data_atribuicao_servidor')
-            if data_str:
-                try:
-                    if isinstance(data_str, str):
-                        year = int(data_str[:4])
-                    else:
-                        year = data_str.year
-                    years.add(year)
-                except:
-                    pass
-        # Ordena os anos em ordem decrescente para mostrar os mais recentes primeiro
-        return sorted(list(years), reverse=True)
-    except Exception as e:
-        print(f"Erro ao buscar anos disponíveis para relatório: {e}")
-        return [] # Retorna uma lista vazia em caso de erro
+    current_year = datetime.now().year
+    return list(range(current_year, 2023, -1))
 
 
 def sanitize_text(text):
@@ -207,215 +196,305 @@ def _format_value(value, is_percent=False):
 def _calculate_average(series): return series.mean() if not series.empty else 0
 def _calculate_percentage(series): return (series.sum() / len(series) * 100) if not series.empty else 0
 
+def _fetch_processes_for_report(end_date_iso: str):
+    """
+    Fetch only the columns needed for report metrics, filtered to processes
+    that existed by end_date (data_atribuicao_servidor <= end_date).
+    Returns list of dicts.
+    """
+    columns = (
+        "id, id_servidor_responsavel, id_chefe_gabinete, id_procurador, "
+        "id_tipo_produto, data_atribuicao_servidor, data_conclusao_servidor, "
+        "data_conclusao_chefe, prazo_servidor_aplicado, prazo_chefe_aplicado, "
+        "prazo_total_dias_suspenso, status_servidor, status_chefe, "
+        "data_finalizacao, nao_se_aplica_prazo_servidor, ignorar_revisao_chefe, "
+        "ignorar_analise_procurador"
+    )
+    return QueryBuilder("processos") \
+        .select(columns) \
+        .lte("data_atribuicao_servidor", end_date_iso) \
+        .fetch_all()
+
+
+def _prefetch_leave_sets(user_ids: set) -> dict:
+    """
+    Pre-fetch leave date sets for all user_ids at once.
+    Returns dict: {user_id: set(date)}.
+    Uses the cached get_leave_dates_set per user (10min TTL),
+    but calling it eagerly here avoids surprise latency inside .apply().
+    """
+    leave_map = {}
+    for uid in user_ids:
+        if uid is not None:
+            leave_map[uid] = get_all_leave_dates_by_user().get(uid, set()) # Changed to use get_all_leave_dates_by_user
+    return leave_map
+
+
+def _build_report_dataframe(processes: list, product_types_map: dict):
+    """
+    Build the DataFrame used by report metrics from raw process dicts.
+    """
+    data = []
+    for p in processes:
+        tipo_produto = product_types_map.get(p.get('id_tipo_produto'), {})
+        data.append({
+            'id_servidor_responsavel': p.get('id_servidor_responsavel'),
+            'id_chefe_gabinete': p.get('id_chefe_gabinete'),
+            'id_procurador': p.get('id_procurador'),
+            'data_atribuicao_servidor': p.get('data_atribuicao_servidor'),
+            'data_conclusao_servidor': p.get('data_conclusao_servidor'),
+            'data_conclusao_chefe': p.get('data_conclusao_chefe'),
+            'prazo_servidor_aplicado': p.get('prazo_servidor_aplicado'),
+            'prazo_chefe_aplicado': p.get('prazo_chefe_aplicado'),
+            'prazo_total_dias_suspenso': p.get('prazo_total_dias_suspenso', 0),
+            'status_servidor': p.get('status_servidor'),
+            'status_chefe': p.get('status_chefe'),
+            'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis'),
+            'data_finalizacao': p.get('data_finalizacao'),
+            'nao_se_aplica_prazo_servidor': p.get('nao_se_aplica_prazo_servidor', False),
+            'ignorar_revisao_chefe': p.get('ignorar_revisao_chefe', False),
+            'ignorar_analise_procurador': p.get('ignorar_analise_procurador', False)
+        })
+
+    df = pd.DataFrame(data)
+    if df.empty:
+        return df
+
+    for col in ['data_atribuicao_servidor', 'data_conclusao_servidor',
+                'data_conclusao_chefe', 'data_finalizacao']:
+        df[col] = pd.to_datetime(df[col], errors='coerce')
+
+    return df
+
+
+def _compute_servidor_metrics(df_full, feriados, leave_map):
+    """
+    Compute server duration and deadline columns using batch functions.
+    Returns df_servidor_concluido with 'duracao_servidor', 'data_final_servidor', 'no_prazo_servidor'.
+    """
+    df = df_full.dropna(subset=['data_atribuicao_servidor', 'data_conclusao_servidor']).copy()
+    if df.empty:
+        return df
+
+    def calc_duracao(row):
+        uid = row['id_servidor_responsavel']
+        af = leave_map.get(uid, set())
+        if row['tipo_contagem_prazo'] == 'dias uteis':
+            return max(0, calculate_net_work_days_batch(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_servidor'].date(),
+                af, feriados
+            ) - row['prazo_total_dias_suspenso'])
+        else:
+            return calculate_net_duration_calendar_batch(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_servidor'].date(),
+                af, row['prazo_total_dias_suspenso']
+            )
+
+    def calc_due(row):
+        uid = row['id_servidor_responsavel']
+        af = leave_map.get(uid, set())
+        return calculate_due_date_batch(
+            row['data_atribuicao_servidor'].date(),
+            row['prazo_servidor_aplicado'],
+            row['tipo_contagem_prazo'],
+            af, feriados,
+            row['prazo_total_dias_suspenso']
+        )
+
+    df['duracao_servidor'] = df.apply(calc_duracao, axis=1)
+    df['data_final_servidor'] = df.apply(calc_due, axis=1)
+    df['no_prazo_servidor'] = df['data_conclusao_servidor'].dt.date <= df['data_final_servidor']
+    return df
+
+
+def _compute_chefe_metrics(df_full, feriados, leave_map):
+    """
+    Compute chief review duration and deadline columns using batch functions.
+    Returns df_chefe_concluido with 'duracao_revisao_chefe', 'data_final_chefe', 'no_prazo_chefe'.
+    """
+    df = df_full.dropna(subset=['data_conclusao_servidor', 'data_conclusao_chefe']).copy()
+    if df.empty:
+        return df
+
+    def calc_duracao(row):
+        uid = row['id_chefe_gabinete']
+        af = leave_map.get(uid, set())
+        if row['tipo_contagem_prazo'] == 'dias uteis':
+            return max(0, calculate_net_work_days_batch(
+                row['data_conclusao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                af, feriados
+            ) - row['prazo_total_dias_suspenso'])
+        else:
+            return calculate_net_duration_calendar_batch(
+                row['data_conclusao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                af, row['prazo_total_dias_suspenso']
+            )
+
+    def calc_due(row):
+        uid = row['id_chefe_gabinete']
+        af = leave_map.get(uid, set())
+        return calculate_due_date_batch(
+            row['data_conclusao_servidor'].date(),
+            row['prazo_chefe_aplicado'],
+            row['tipo_contagem_prazo'],
+            af, feriados,
+            row['prazo_total_dias_suspenso']
+        )
+
+    df['duracao_revisao_chefe'] = df.apply(calc_duracao, axis=1)
+    df['data_final_chefe'] = df.apply(calc_due, axis=1)
+    df['no_prazo_chefe'] = df['data_conclusao_chefe'].dt.date <= df['data_final_chefe']
+    return df
+
+
+def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
+                     start_date, end_date, procurador_names):
+    """
+    Extract all 9 metrics from pre-computed DataFrames for a given period.
+    """
+    report_cutoff_dt = pd.to_datetime(end_date)
+
+    # Filter by completion date within period
+    df_servidor_mes = df_servidor_concluido[
+        df_servidor_concluido['data_conclusao_servidor'].dt.date.between(start_date, end_date)
+    ] if not df_servidor_concluido.empty else df_servidor_concluido
+
+    df_chefe_mes = df_chefe_concluido[
+        df_chefe_concluido['data_conclusao_chefe'].dt.date.between(start_date, end_date)
+    ] if not df_chefe_concluido.empty else df_chefe_concluido
+
+    metricas = {}
+
+    # 1) Processos concluídos pelos servidores (por Procurador)
+    m1 = df_servidor_mes.groupby('id_procurador').size() if not df_servidor_mes.empty else pd.Series(dtype=int)
+    metricas["1) Número de processos concluídos pelos pareceristas no mês (visão por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names
+    }
+
+    # 2) Média de dias (Servidor)
+    m2 = df_servidor_mes.groupby('id_procurador')['duracao_servidor'].mean() if not df_servidor_mes.empty else pd.Series(dtype=float)
+    metricas["2) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m2.items() if pid in procurador_names
+    }
+
+    # 3) Percentual no prazo (Servidor)
+    m3 = df_servidor_mes.groupby('id_procurador')['no_prazo_servidor'].apply(_calculate_percentage) if not df_servidor_mes.empty else pd.Series(dtype=float)
+    metricas["3) Percentual de processos concluídos no prazo por pareceristas (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m3.items() if pid in procurador_names
+    }
+
+    # 4) Acervo Servidor (Snapshot)
+    m4_df = df_full[
+        (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) &
+        (~df_full['nao_se_aplica_prazo_servidor'].fillna(False).astype(bool)) &
+        (
+            (
+                (
+                    (df_full['data_conclusao_servidor'].isnull()) |
+                    (df_full['data_conclusao_servidor'] > report_cutoff_dt)
+                ) &
+                (df_full['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo']))
+            )
+            |
+            (df_full['status_servidor'] == 'Devolvido')
+        )
+    ]
+    m4 = m4_df.groupby('id_procurador').size()
+    metricas["4) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m4.items() if pid in procurador_names
+    }
+
+    # 5) Número revisados (Chefe)
+    m5 = df_chefe_mes.groupby('id_procurador').size() if not df_chefe_mes.empty else pd.Series(dtype=int)
+    metricas["5) Número de processos revisados no mês por chefe de gabinete (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m5.items() if pid in procurador_names
+    }
+
+    # 6) Média dias revisão (Chefe)
+    m6 = df_chefe_mes.groupby('id_procurador')['duracao_revisao_chefe'].mean() if not df_chefe_mes.empty else pd.Series(dtype=float)
+    metricas["6) Média de dias que os chefes de gabinete demoraram para finalizar a revisão do processo (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m6.items() if pid in procurador_names
+    }
+
+    # 7) Percentual revisão no prazo (Chefe)
+    m7 = df_chefe_mes.groupby('id_procurador')['no_prazo_chefe'].apply(_calculate_percentage) if not df_chefe_mes.empty else pd.Series(dtype=float)
+    metricas["7) Percentual de processos revisados pelos chefes de gabinetes no prazo (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m7.items() if pid in procurador_names
+    }
+
+    # 8) Acervo Revisão Chefe (Snapshot)
+    m8_df = df_full[
+        (df_full['data_conclusao_servidor'] <= report_cutoff_dt) &
+        (~df_full['ignorar_revisao_chefe'].fillna(False).astype(bool)) &
+        (
+            (
+                (df_full['data_conclusao_chefe'].isnull()) |
+                (df_full['data_conclusao_chefe'] > report_cutoff_dt)
+            )
+            |
+            (df_full['status_chefe'] == 'Devolvido')
+        )
+    ]
+    m8 = m8_df.groupby('id_procurador').size()
+    metricas["8) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names
+    }
+
+    # 9) Acervo com Procurador (Snapshot)
+    m9_df = df_full[
+        (df_full['data_conclusao_chefe'] <= report_cutoff_dt) &
+        (~df_full['ignorar_analise_procurador'].fillna(False).astype(bool)) &
+        (df_full['status_chefe'] != 'Devolvido') &
+        (
+            (df_full['data_finalizacao'].isnull()) |
+            (df_full['data_finalizacao'] > report_cutoff_dt)
+        )
+    ]
+    m9 = m9_df.groupby('id_procurador').size()
+    metricas["9) Acervo de processo revisados pelo chefe de gabinete que estão com o procurador (visão média por procurador)"] = {
+        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m9.items() if pid in procurador_names
+    }
+
+    return metricas
+
+
 def calcular_metricas_mensais(mes, ano):
-    """Calcula métricas mensais usando Supabase API."""
+    """Calcula métricas mensais usando Supabase API (otimizado com batch)."""
     try:
         start_date = date(ano, mes, 1)
         end_date = (date(ano, mes, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         hierarchy = _get_user_hierarchy()
-        
-        # Fetch all processes and types
-        all_processes = select_all("processos")
+        processes = _fetch_processes_for_report(end_date.isoformat())
         all_product_types = select_all("tipos_produto")
         product_types_map = {p.get('id'): p for p in all_product_types}
-        
-        # Build DataFrame
-        data = []
-        for p in all_processes:
-            tipo_produto = product_types_map.get(p.get('id_tipo_produto'), {})
-            data.append({
-                'id_servidor_responsavel': p.get('id_servidor_responsavel'),
-                'id_chefe_gabinete': p.get('id_chefe_gabinete'),
-                'id_procurador': p.get('id_procurador'),
-                'data_atribuicao_servidor': p.get('data_atribuicao_servidor'),
-                'data_conclusao_servidor': p.get('data_conclusao_servidor'),
-                'data_conclusao_chefe': p.get('data_conclusao_chefe'),
-                'prazo_servidor_aplicado': p.get('prazo_servidor_aplicado'),
-                'prazo_chefe_aplicado': p.get('prazo_chefe_aplicado'),
-                'prazo_total_dias_suspenso': p.get('prazo_total_dias_suspenso', 0),
-                'status_servidor': p.get('status_servidor'),
-                'status_chefe': p.get('status_chefe'),
-                'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis'),
-                'data_finalizacao': p.get('data_finalizacao'),
-                'nao_se_aplica_prazo_servidor': p.get('nao_se_aplica_prazo_servidor', False),
-                'ignorar_revisao_chefe': p.get('ignorar_revisao_chefe', False),
-                'ignorar_analise_procurador': p.get('ignorar_analise_procurador', False)
-            })
-        
-        df_full = pd.DataFrame(data)
+
+        df_full = _build_report_dataframe(processes, product_types_map)
         if df_full.empty:
             return {}
 
-        # Data de corte para o relatório (último dia do mês)
-        report_cutoff_dt = pd.to_datetime(end_date)
+        # Pre-fetch holidays and leaves in batch
+        feriados = get_all_holidays()
+        user_ids = set()
+        for col in ['id_servidor_responsavel', 'id_chefe_gabinete']:
+            user_ids.update(df_full[col].dropna().unique())
+        leave_map = _prefetch_leave_sets(user_ids)
 
-        for col in ['data_atribuicao_servidor', 'data_conclusao_servidor', 'data_conclusao_chefe', 'data_finalizacao']:  # Added data_finalizacao
-            df_full[col] = pd.to_datetime(df_full[col], errors='coerce')
+        # Compute derived columns using batch functions (no per-row DB calls)
+        df_servidor_concluido = _compute_servidor_metrics(df_full, feriados, leave_map)
+        df_chefe_concluido = _compute_chefe_metrics(df_full, feriados, leave_map)
 
-        df_servidor_concluido = df_full.dropna(subset=['data_atribuicao_servidor', 'data_conclusao_servidor']).copy()
-        df_servidor_concluido['duracao_servidor'] = df_servidor_concluido.apply(
-            lambda row: (
-                # Dias Úteis: desconta fds, feriados, afastamentos e suspensão manual
-                max(0, utils.calculate_net_work_days(
-                    row['data_atribuicao_servidor'].date(),
-                    row['data_conclusao_servidor'].date(),
-                    row['id_servidor_responsavel']
-                ) - row['prazo_total_dias_suspenso'])
-                if row['tipo_contagem_prazo'] == 'dias uteis'
-                # Dias Corridos: desconta apenas afastamentos e suspensão manual
-                else utils.calculate_net_duration_calendar(
-                    row['data_atribuicao_servidor'].date(),
-                    row['data_conclusao_servidor'].date(),
-                    row['id_servidor_responsavel'],
-                    row['prazo_total_dias_suspenso']
-                )
-            ), axis=1
-        )
-        df_servidor_concluido['data_final_servidor'] = df_servidor_concluido.apply(
-            lambda row: utils.calculate_due_date(row['data_atribuicao_servidor'].date(), row['prazo_servidor_aplicado'], row['tipo_contagem_prazo'], row['id_servidor_responsavel'], row['prazo_total_dias_suspenso']), axis=1
-        )
-        # Metric 2 already uses data_final_servidor which considers suspension.
-
-        df_servidor_concluido['no_prazo_servidor'] = df_servidor_concluido['data_conclusao_servidor'].dt.date <= df_servidor_concluido['data_final_servidor']
-
-        df_chefe_concluido = df_full.dropna(subset=['data_conclusao_servidor', 'data_conclusao_chefe']).copy()
-        df_chefe_concluido['duracao_revisao_chefe'] = df_chefe_concluido.apply(
-            lambda row: (
-                # Dias Úteis: desconta fds, feriados, afastamentos e suspensão manual
-                max(0, utils.calculate_net_work_days(
-                    row['data_conclusao_servidor'].date(), 
-                    row['data_conclusao_chefe'].date(), 
-                    row['id_chefe_gabinete']
-                ) - row['prazo_total_dias_suspenso'])
-                if row['tipo_contagem_prazo'] == 'dias uteis'
-                # Dias Corridos: desconta apenas afastamentos e suspensão manual
-                else utils.calculate_net_duration_calendar(
-                    row['data_conclusao_servidor'].date(),
-                    row['data_conclusao_chefe'].date(),
-                    row['id_chefe_gabinete'],
-                    row['prazo_total_dias_suspenso']
-                )
-            ), axis=1
-        )
-        df_chefe_concluido['data_final_chefe'] = df_chefe_concluido.apply(
-            lambda row: utils.calculate_due_date(row['data_conclusao_servidor'].date(), row['prazo_chefe_aplicado'], row['tipo_contagem_prazo'], row['id_chefe_gabinete'], row['prazo_total_dias_suspenso']), axis=1
-        )
-        # Metric 6 already uses data_final_chefe which considers suspension.
-        
-        df_chefe_concluido['no_prazo_chefe'] = df_chefe_concluido['data_conclusao_chefe'].dt.date <= df_chefe_concluido['data_final_chefe']
-        
-        # Dataframes já filtrados por data (snapshotted pelas datas)
-        df_servidor_mes = df_servidor_concluido[df_servidor_concluido['data_conclusao_servidor'].dt.date.between(start_date, end_date)]
-        df_chefe_mes = df_chefe_concluido[df_chefe_concluido['data_conclusao_chefe'].dt.date.between(start_date, end_date)]
-        
-        # Mapeamento de ID -> Nome Procurador
+        # Procurador name mapping
         procurador_names = {pid: pdata['nome'] for pid, pdata in hierarchy['procuradores'].items()}
 
-        metricas_finais = {}
-        
-        # 1) Número de processos concluídos pelos servidores (por Procurador)
-        m1 = df_servidor_mes.groupby('id_procurador').size()
-        metricas_finais["1) Número de processos concluídos pelos pareceristas no mês (visão por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names
-        }
+        return _extract_metrics(
+            df_full, df_servidor_concluido, df_chefe_concluido,
+            start_date, end_date, procurador_names
+        )
 
-        # 2) Média de dias (Servidor)
-        m2 = df_servidor_mes.groupby('id_procurador')['duracao_servidor'].mean()
-        metricas_finais["2) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m2.items() if pid in procurador_names
-        }
-
-        # 3) Percentual no prazo (Servidor)
-        m3 = df_servidor_mes.groupby('id_procurador')['no_prazo_servidor'].apply(_calculate_percentage)
-        metricas_finais["3) Percentual de processos concluídos no prazo por pareceristas (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m3.items() if pid in procurador_names
-        }
-
-        # 4) Acervo Servidor (Snapshot)
-        m4_df = df_full[
-            # Base: servidor recebeu até fim do mês
-            (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) & 
-            # Excluir processos que pulam a fase do servidor
-            (~df_full['nao_se_aplica_prazo_servidor'].fillna(False).astype(bool)) &
-            (
-                # Caso normal: processo não concluído pelo servidor
-                (
-                    (
-                        (df_full['data_conclusao_servidor'].isnull()) | 
-                        (df_full['data_conclusao_servidor'] > report_cutoff_dt)
-                    ) &
-                    (df_full['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo']))
-                )
-                |
-                # Caso devolvido: processo voltou para o servidor (data_conclusao_servidor já preenchida)
-                (df_full['status_servidor'] == 'Devolvido')
-            )
-        ]
-        m4 = m4_df.groupby('id_procurador').size()
-        metricas_finais["4) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = {
-             procurador_names.get(pid, f"ID {pid}"): val for pid, val in m4.items() if pid in procurador_names
-        }
-        
-        # 5) Número revisados (Chefe)
-        m5 = df_chefe_mes.groupby('id_procurador').size()
-        metricas_finais["5) Número de processos revisados no mês por chefe de gabinete (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m5.items() if pid in procurador_names
-        }
-
-        # 6) Média dias revisão (Chefe)
-        m6 = df_chefe_mes.groupby('id_procurador')['duracao_revisao_chefe'].mean()
-        metricas_finais["6) Média de dias que os chefes de gabinete demoraram para finalizar a revisão do processo (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m6.items() if pid in procurador_names
-        }
-
-        # 7) Percentual revisão no prazo (Chefe)
-        m7 = df_chefe_mes.groupby('id_procurador')['no_prazo_chefe'].apply(_calculate_percentage)
-        metricas_finais["7) Percentual de processos revisados pelos chefes de gabinetes no prazo (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m7.items() if pid in procurador_names
-        }
-
-        # 8) Acervo Revisão Chefe (Snapshot)
-        m8_df = df_full[
-            # Base: servidor concluiu até fim do mês
-            (df_full['data_conclusao_servidor'] <= report_cutoff_dt) &
-            # Excluir processos que pulam a fase do chefe
-            (~df_full['ignorar_revisao_chefe'].fillna(False).astype(bool)) &
-            (
-                # Caso normal: chefe ainda não revisou
-                (
-                    (df_full['data_conclusao_chefe'].isnull()) |
-                    (df_full['data_conclusao_chefe'] > report_cutoff_dt)
-                )
-                |
-                # Caso devolvido pelo procurador: voltou para o chefe (data_conclusao_chefe já preenchida)
-                (df_full['status_chefe'] == 'Devolvido')
-            )
-        ]
-        m8 = m8_df.groupby('id_procurador').size()
-        metricas_finais["8) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = {
-            procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names
-        }
-
-        # 9) Acervo com Procurador (Snapshot)
-        m9_df = df_full[
-            # Base: chefe concluiu até fim do mês
-            (df_full['data_conclusao_chefe'] <= report_cutoff_dt) &
-            # Excluir processos que pulam a fase do procurador
-            (~df_full['ignorar_analise_procurador'].fillna(False).astype(bool)) &
-            # Excluir processos devolvidos ao chefe (senão conta 2x: M8 e M9)
-            (df_full['status_chefe'] != 'Devolvido') &
-            (
-                (df_full['data_finalizacao'].isnull()) | 
-                (df_full['data_finalizacao'] > report_cutoff_dt)
-            )
-        ]
-        m9 = m9_df.groupby('id_procurador').size()
-        metricas_finais["9) Acervo de processo revisados pelo chefe de gabinete que estão com o procurador (visão média por procurador)"] = {
-             procurador_names.get(pid, f"ID {pid}"): val for pid, val in m9.items() if pid in procurador_names
-        }
-
-        return metricas_finais
-        
     except Exception as e:
         import traceback
         print(f"ERRO DETALHADO em calcular_metricas_mensais: {e}\n{traceback.format_exc()}")
@@ -661,73 +740,109 @@ _METRICAS_SNAPSHOT = {"4)", "8)", "9)"}
 def calcular_metricas_periodo(ano: int, meses: list) -> dict:
     """
     Calcula métricas consolidadas para um período de vários meses.
+    Otimizado: busca dados UMA VEZ para o período inteiro, depois fatia por mês.
     - Métricas de fluxo (1-3, 5-7): acumuladas/mediadas ao longo dos meses.
     - Métricas de snapshot (4, 8, 9): usam o último mês do período.
     """
     if not meses:
         return {}
 
-    # Coletar métricas de cada mês
-    metricas_por_mes = {}
-    for mes in meses:
-        m = calcular_metricas_mensais(mes, ano)
-        if m:
-            metricas_por_mes[mes] = m
+    # Calculate overall date range for the entire period
+    first_month_start = date(ano, min(meses), 1)
+    last_month = max(meses)
+    last_month_end = (date(ano, last_month, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
 
-    if not metricas_por_mes:
-        return {}
+    try:
+        hierarchy = _get_user_hierarchy()
 
-    ultimo_mes = max(metricas_por_mes.keys())
+        # Single data fetch for the entire period
+        processes = _fetch_processes_for_report(last_month_end.isoformat())
+        all_product_types = select_all("tipos_produto")
+        product_types_map = {p.get('id'): p for p in all_product_types}
 
-    # Usar o primeiro mês que tem dados como modelo para as chaves
-    primeiro_mes_com_dados = min(metricas_por_mes.keys())
-    modelo = metricas_por_mes[primeiro_mes_com_dados]
+        df_full = _build_report_dataframe(processes, product_types_map)
+        if df_full.empty:
+            return {}
 
-    resultado = {}
+        # Pre-fetch holidays and leaves ONCE
+        feriados = get_all_holidays()
+        user_ids = set()
+        for col in ['id_servidor_responsavel', 'id_chefe_gabinete']:
+            user_ids.update(df_full[col].dropna().unique())
+        leave_map = _prefetch_leave_sets(user_ids)
 
-    for chave in sorted(modelo.keys()):
-        prefixo = chave.strip()[:2]
+        # Compute derived columns ONCE
+        df_servidor_concluido = _compute_servidor_metrics(df_full, feriados, leave_map)
+        df_chefe_concluido = _compute_chefe_metrics(df_full, feriados, leave_map)
 
-        if prefixo in _METRICAS_SNAPSHOT:
-            # Para snapshot, usar o último mês
-            if ultimo_mes in metricas_por_mes and chave in metricas_por_mes[ultimo_mes]:
-                resultado[chave] = metricas_por_mes[ultimo_mes][chave]
-            else:
-                resultado[chave] = modelo[chave]
+        procurador_names = {pid: pdata['nome'] for pid, pdata in hierarchy['procuradores'].items()}
 
-        elif prefixo in _METRICAS_FLUXO:
-            # Para fluxo, agregar ao longo dos meses
-            dados_agregados = {}
+        # Compute metrics per month (no DB calls — just DataFrame slicing)
+        metricas_por_mes = {}
+        for mes in meses:
+            start_date = date(ano, mes, 1)
+            end_date = (date(ano, mes, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            m = _extract_metrics(
+                df_full, df_servidor_concluido, df_chefe_concluido,
+                start_date, end_date, procurador_names
+            )
+            if m:
+                metricas_por_mes[mes] = m
 
-            for mes, metricas_mes in metricas_por_mes.items():
-                if chave not in metricas_mes:
-                    continue
-                dados_mes = metricas_mes[chave]
-                if not isinstance(dados_mes, dict):
-                    continue
+        if not metricas_por_mes:
+            return {}
 
-                for procurador, valor in dados_mes.items():
-                    if procurador not in dados_agregados:
-                        dados_agregados[procurador] = []
-                    if valor is not None and not (isinstance(valor, float) and np.isnan(valor)):
-                        dados_agregados[procurador].append(valor)
+        # Aggregate per-month metrics
+        ultimo_mes = max(metricas_por_mes.keys())
+        primeiro_mes_com_dados = min(metricas_por_mes.keys())
+        modelo = metricas_por_mes[primeiro_mes_com_dados]
 
-            # Métrica 1 e 5: soma (contagens)
-            # Métricas 2, 3, 6, 7: média
-            resultado_metrica = {}
-            for procurador, valores in dados_agregados.items():
-                if not valores:
-                    resultado_metrica[procurador] = 0
-                elif prefixo in {"1)", "5)"}:
-                    resultado_metrica[procurador] = sum(valores)
+        resultado = {}
+
+        for chave in sorted(modelo.keys()):
+            prefixo = chave.strip()[:2]
+
+            if prefixo in _METRICAS_SNAPSHOT:
+                if ultimo_mes in metricas_por_mes and chave in metricas_por_mes[ultimo_mes]:
+                    resultado[chave] = metricas_por_mes[ultimo_mes][chave]
                 else:
-                    resultado_metrica[procurador] = sum(valores) / len(valores)
+                    resultado[chave] = modelo[chave]
 
-            resultado[chave] = resultado_metrica
-        else:
-            resultado[chave] = modelo.get(chave, {})
+            elif prefixo in _METRICAS_FLUXO:
+                dados_agregados = {}
 
-    return resultado
+                for mes_key, metricas_mes in metricas_por_mes.items():
+                    if chave not in metricas_mes:
+                        continue
+                    dados_mes = metricas_mes[chave]
+                    if not isinstance(dados_mes, dict):
+                        continue
+
+                    for procurador, valor in dados_mes.items():
+                        if procurador not in dados_agregados:
+                            dados_agregados[procurador] = []
+                        if valor is not None and not (isinstance(valor, float) and np.isnan(valor)):
+                            dados_agregados[procurador].append(valor)
+
+                resultado_metrica = {}
+                for procurador, valores in dados_agregados.items():
+                    if not valores:
+                        resultado_metrica[procurador] = 0
+                    elif prefixo in {"1)", "5)"}:
+                        resultado_metrica[procurador] = sum(valores)
+                    else:
+                        resultado_metrica[procurador] = sum(valores) / len(valores)
+
+                resultado[chave] = resultado_metrica
+            else:
+                resultado[chave] = modelo.get(chave, {})
+
+        return resultado
+
+    except Exception as e:
+        import traceback
+        print(f"ERRO DETALHADO em calcular_metricas_periodo: {e}\n{traceback.format_exc()}")
+        return {}
 
 
 def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> bytes:
@@ -791,18 +906,54 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
 def gerar_relatorio_lote_zip(ano: int, meses: list = None) -> bytes:
     """
     Gera relatórios individuais para cada mês especificado e os empacota em um ZIP.
-    Se meses não for especificado, gera para todos os 12 meses.
+    Otimizado: busca dados UMA VEZ e fatia por mês.
     Retorna os bytes do arquivo ZIP.
     """
     if meses is None:
         meses = list(range(1, 13))
+
+    # Single data fetch for the entire year
+    last_month_end = date(ano, 12, 31)
+    try:
+        hierarchy = _get_user_hierarchy()
+        processes = _fetch_processes_for_report(last_month_end.isoformat())
+        all_product_types = select_all("tipos_produto")
+        product_types_map = {p.get('id'): p for p in all_product_types}
+
+        df_full = _build_report_dataframe(processes, product_types_map)
+
+        feriados = get_all_holidays()
+        leave_map = {}
+        if not df_full.empty:
+            user_ids = set()
+            for col in ['id_servidor_responsavel', 'id_chefe_gabinete']:
+                user_ids.update(df_full[col].dropna().unique())
+            leave_map = _prefetch_leave_sets(user_ids)
+
+        df_servidor_concluido = _compute_servidor_metrics(df_full, feriados, leave_map) if not df_full.empty else pd.DataFrame()
+        df_chefe_concluido = _compute_chefe_metrics(df_full, feriados, leave_map) if not df_full.empty else pd.DataFrame()
+
+        procurador_names = {pid: pdata['nome'] for pid, pdata in hierarchy['procuradores'].items()}
+    except Exception as e:
+        print(f"Erro ao carregar dados para lote: {e}")
+        df_full = pd.DataFrame()
+        df_servidor_concluido = pd.DataFrame()
+        df_chefe_concluido = pd.DataFrame()
+        procurador_names = {}
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         meses_gerados = 0
         for mes in meses:
             try:
-                metricas = calcular_metricas_mensais(mes, ano)
+                if df_full.empty:
+                    continue
+                start_date = date(ano, mes, 1)
+                end_date = (date(ano, mes, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+                metricas = _extract_metrics(
+                    df_full, df_servidor_concluido, df_chefe_concluido,
+                    start_date, end_date, procurador_names
+                )
                 if metricas:
                     pdf_bytes = gerar_relatorio_pdf(metricas, mes, ano)
                     mes_nome = MESES_NOME.get(mes, str(mes))
@@ -813,7 +964,6 @@ def gerar_relatorio_lote_zip(ano: int, meses: list = None) -> bytes:
                 print(f"Erro ao gerar relatório de {mes}/{ano}: {e}")
 
         if meses_gerados == 0:
-            # Adicionar um arquivo de aviso se nenhum relatório foi gerado
             zf.writestr("AVISO.txt", f"Nenhum dado encontrado para o ano {ano}.")
 
     buffer.seek(0)
