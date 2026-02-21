@@ -5,9 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import List, Dict, Any, Callable, Tuple, Optional
 from thefuzz import fuzz
 from supabase_client import QueryBuilder, insert, select_all
-from db_compat import (
-    get_product_type_by_id, calculate_due_date, select_all
-)
+import db_compat
 
 # Importar funções de timezone do módulo separado (sem dependências circulares)
 from utils.timezone import now_brazil, today_brazil, BRAZIL_TZ
@@ -130,7 +128,7 @@ def get_servidor_status(processo: dict, db_session=None) -> str:
     if processo.get('nao_se_aplica_prazo_servidor'):
         return "No Prazo"
 
-    produto_obj = get_product_type_by_id(processo.get('id_tipo_produto'))
+    produto_obj = db_compat.get_product_type_by_id(processo.get('id_tipo_produto'))
     if not produto_obj:
         return "Erro de Vinculação"
 
@@ -138,7 +136,7 @@ def get_servidor_status(processo: dict, db_session=None) -> str:
     if isinstance(dt_atrib, str):
         dt_atrib = date.fromisoformat(dt_atrib)
 
-    data_final_servidor = calculate_due_date(
+    data_final_servidor = db_compat.calculate_due_date(
         start_date=dt_atrib,
         prazo_dias=processo.get('prazo_servidor_aplicado'),
         tipo_contagem=produto_obj.get('tipo_contagem_prazo'),
