@@ -93,6 +93,38 @@ def get_active_leaves_count(user_ids: list):
         .select("id") \
         .execute()
 
+@st.cache_data(ttl=600)
+def get_all_leave_dates_by_user():
+    """
+    Carrega afastamentos de TODOS os usuários de uma só vez.
+    Retorna um dict {user_id: set(date)} para uso em batch.
+    """
+    all_leaves = QueryBuilder("afastamentos").fetch_all()
+    result = {}
+    for af in all_leaves:
+        uid = af.get('id_usuario')
+        if uid is None:
+            continue
+        if uid not in result:
+            result[uid] = set()
+        
+        af_inicio = af.get('data_inicio')
+        af_fim = af.get('data_fim')
+        
+        if isinstance(af_inicio, str):
+            af_inicio = datetime.fromisoformat(af_inicio).date()
+        if isinstance(af_fim, str):
+            af_fim = datetime.fromisoformat(af_fim).date()
+        
+        if af_inicio and af_fim:
+            d = af_inicio
+            while d <= af_fim:
+                result[uid].add(d)
+                d += timedelta(days=1)
+    
+    return result
+
+
 def get_leaves_filtered(user_ids: list):
     """Retorna afastamentos de uma lista de usuários."""
     if not user_ids: return []
