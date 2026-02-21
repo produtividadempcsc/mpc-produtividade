@@ -343,14 +343,13 @@ def initialize_restored_data():
                 updates.append(updated_fields)
 
         if updates:
-            chunk_size = 100
-            for i in range(0, len(updates), chunk_size):
-                chunk = updates[i:i + chunk_size]
+            print(f"Atualizando {len(updates)} processos...")
+            for update_dict in updates:
+                pid = update_dict.pop('id')
                 try:
-                    supabase.table("processos").upsert(chunk).execute()
-                    print(f"Update partial batch {i}-{i+len(chunk)}")
+                    update_by_id("processos", pid, update_dict)
                 except Exception as e:
-                    print(f"Error upserting batch: {e}")
+                    print(f"Error updating process {pid}: {e}")
         
         print(f"Pós-processamento concluído. {len(updates)} processos atualizados.")
         
