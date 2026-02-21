@@ -171,23 +171,24 @@ def restore_database(backup_source):
                     if records:
                         # print(f"      [DEBUG] Exemplo: {str(records[0])[:200]}...")
                         pass
-                    
-                    # Upsert em massa (se a API suportar) ou linha a linha?
-                    # supabase-py .upsert() suporta lista.
+                    # Usando insert direto para capturar exceções de lote
+                    # (Como a base foi limpa, podemos usar insert. O upsert escondia o erro)
                     try:
-                        # Tentar em lote
-                        result = upsert(table, records)
-                        if result: # Upsert retorna dados se sucesso, mas upsert void pode variar
-                             pass
+                        from supabase_client import get_supabase
+                        supabase_client = get_supabase()
+                        # Tentar INSERT em lote
+                        result = supabase_client.table(table).insert(records).execute()
                     except Exception as e_batch:
-                        print(f"      [AVISO] Falha no lote para '{table}'. Erro: {repr(e_batch)}")
-                        print(f"      [AVISO] Tentando linha a linha...")
+                        print(f"      [AVISO] Falha no insert em lote para '{table}'. Erro: {repr(e_batch)}")
+                        print(f"      [AVISO] Tentando linha a linha (com upsert)...")
                         # Fallback linha a linha
                         for record in records:
                             try:
-                                upsert(table, record)
+                                res_row = upsert(table, record)
+                                if res_row is None:
+                                     print(f"         [ERRO ROW] Tabela '{table}', registro id={record.get('id', 'N/A')} falhou (erro exibido pelo client).")
                             except Exception as e_row:
-                                print(f"         [ERRO ROW] Tabela '{table}', Falha no registro id={record.get('id', 'N/A')}: {repr(e_row)}")
+                                print(f"         [ERRO ROW] Tabela '{table}', Falha inesperada no registro id={record.get('id', 'N/A')}: {repr(e_row)}")
                             
                     success_count += 1
                     
