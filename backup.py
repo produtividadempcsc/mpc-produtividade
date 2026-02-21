@@ -137,6 +137,9 @@ def restore_database(backup_source):
         success_count = 0
         errors = []
         
+        # Armazenar IDs válidos de usuários para filtrar chaves estrangeiras órfãs
+        valid_user_ids = set()
+
         for table in RESTORE_ORDER:
             if table in xls.sheet_names:
                 try:
@@ -145,6 +148,20 @@ def restore_database(backup_source):
                     if df.empty:
                         print(f"   [AVISO] Tabela '{table}' vazia no backup. Pulando.")
                         continue
+                        
+                    # Preencher valid_user_ids
+                    if table == 'usuarios':
+                        valid_user_ids = set(df['id'].dropna())
+                    
+                    # Filtrar registros órfãos que fariam a API falhar
+                    if valid_user_ids:
+                        if table == 'afastamentos' and 'id_usuario' in df.columns:
+                            df = df[df['id_usuario'].isin(valid_user_ids)]
+                        elif table == 'gabinete_servidores':
+                            df = df[df['chefe_id'].isin(valid_user_ids) & df['servidor_id'].isin(valid_user_ids)]
+                        elif table == 'procurador_chefes':
+                            df = df[df['procurador_id'].isin(valid_user_ids) & df['chefe_id'].isin(valid_user_ids)]
+                    
                         
                     # Limpeza de dados para compatibilidade com JSON/Supabase
                     # 1. Garantir que NaN se torne None (compatível com JSON null)
