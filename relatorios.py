@@ -458,7 +458,8 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
     """
     Extract all 9 metrics from pre-computed DataFrames for a given period.
     """
-    report_cutoff_dt = pd.to_datetime(end_date)
+    # Ajuste: Inclui o final do dia (23:59:59) para não truncar eventos do último dia do mês
+    report_cutoff_dt = pd.to_datetime(f"{end_date} 23:59:59")
 
     # Filter by completion date within period
     df_servidor_mes = df_servidor_concluido[
@@ -494,15 +495,8 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
         (df_full['data_atribuicao_servidor'] <= report_cutoff_dt) &
         (~df_full['nao_se_aplica_prazo_servidor'].fillna(False).astype(bool)) &
         (
-            (
-                (
-                    (df_full['data_conclusao_servidor'].isnull()) |
-                    (df_full['data_conclusao_servidor'] > report_cutoff_dt)
-                ) &
-                (df_full['status_servidor'].isin(['Em Andamento', 'Atrasado', 'No Prazo']))
-            )
-            |
-            (df_full['status_servidor'] == 'Devolvido')
+            (df_full['data_conclusao_servidor'].isnull()) |
+            (df_full['data_conclusao_servidor'] > report_cutoff_dt)
         )
     ]
     m4 = m4_df.groupby('id_procurador').size()
@@ -533,12 +527,8 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
         (df_full['data_conclusao_servidor'] <= report_cutoff_dt) &
         (~df_full['ignorar_revisao_chefe'].fillna(False).astype(bool)) &
         (
-            (
-                (df_full['data_conclusao_chefe'].isnull()) |
-                (df_full['data_conclusao_chefe'] > report_cutoff_dt)
-            )
-            |
-            (df_full['status_chefe'] == 'Devolvido')
+            (df_full['data_conclusao_chefe'].isnull()) |
+            (df_full['data_conclusao_chefe'] > report_cutoff_dt)
         )
     ]
     m8 = m8_df.groupby('id_procurador').size()
@@ -550,7 +540,6 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
     m9_df = df_full[
         (df_full['data_conclusao_chefe'] <= report_cutoff_dt) &
         (~df_full['ignorar_analise_procurador'].fillna(False).astype(bool)) &
-        (df_full['status_chefe'] != 'Devolvido') &
         (
             (df_full['data_finalizacao'].isnull()) |
             (df_full['data_finalizacao'] > report_cutoff_dt)
@@ -570,7 +559,8 @@ def calcular_metricas_mensais(mes, ano):
         start_date = date(ano, mes, 1)
         end_date = (date(ano, mes, 1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         hierarchy = _get_user_hierarchy()
-        processes = _fetch_processes_for_report(end_date.isoformat())
+        end_date_iso = f"{end_date.isoformat()}T23:59:59"
+        processes = _fetch_processes_for_report(end_date_iso)
         all_product_types = select_all("tipos_produto")
         product_types_map = {p.get('id'): p for p in all_product_types}
 
@@ -859,7 +849,8 @@ def calcular_metricas_periodo(ano: int, meses: list) -> dict:
         hierarchy = _get_user_hierarchy()
 
         # Single data fetch for the entire period
-        processes = _fetch_processes_for_report(last_month_end.isoformat())
+        end_date_iso = f"{last_month_end.isoformat()}T23:59:59"
+        processes = _fetch_processes_for_report(end_date_iso)
         all_product_types = select_all("tipos_produto")
         product_types_map = {p.get('id'): p for p in all_product_types}
 
@@ -1020,7 +1011,8 @@ def gerar_relatorio_lote_zip(ano: int, meses: list = None) -> bytes:
     last_month_end = date(ano, 12, 31)
     try:
         hierarchy = _get_user_hierarchy()
-        processes = _fetch_processes_for_report(last_month_end.isoformat())
+        end_date_iso = f"{last_month_end.isoformat()}T23:59:59"
+        processes = _fetch_processes_for_report(end_date_iso)
         all_product_types = select_all("tipos_produto")
         product_types_map = {p.get('id'): p for p in all_product_types}
 
