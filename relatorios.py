@@ -5,15 +5,105 @@ import os
 import io
 import zipfile
 from fpdf import FPDF
-from supabase_client import QueryBuilder, select_all
+from supabase_client import supabase, QueryBuilder, select_all
 from db_compat import get_all_users
 from repositories.calendar_repository import get_all_holidays
-from repositories.afastamento_repository import get_all_leave_dates_by_user
-from services.prazo_service import (
-    calculate_due_date_batch,
-    calculate_net_work_days_batch,
-    calculate_net_duration_calendar_batch,
-)
+from repositories.afastamento_repository import get_leave_dates_set
+
+
+# ============================================================================
+# BATCH DATE CALCULATION FUNCTIONS (inline to avoid import issues on deploy)
+# These accept pre-loaded holidays/leaves to avoid per-row DB calls.
+# ============================================================================
+
+def calculate_due_date_batch(start_date: date, prazo_dias: int, tipo_contagem: str,
+                             afastamentos_datas: set, feriados: set,
+                             dias_suspensos: int = 0,
+                             nao_se_aplica_prazo: bool = False) -> date:
+    """Calcula data de vencimento usando dados pré-carregados (batch)."""
+    if nao_se_aplica_prazo:
+        return date.max
+    if not prazo_dias or prazo_dias <= 0:
+        return start_date
+
+    # Step 1: Calculate base due date
+    dias_contados_base = 0
+    data_base = start_date
+
+    while dias_contados_base < prazo_dias:
+        data_base += timedelta(days=1)
+        is_dia_valido = False
+
+        if data_base in afastamentos_datas:
+            pass
+        elif tipo_contagem == "dias uteis":
+            if data_base.weekday() < 5 and data_base not in feriados:
+                is_dia_valido = True
+        else:  # dias corridos
+            is_dia_valido = True
+
+        if is_dia_valido:
+            dias_contados_base += 1
+
+    # Step 2: Apply suspension days
+    dias_contados_susp = 0
+    data_final = data_base
+
+    while dias_contados_susp < dias_suspensos:
+        data_final += timedelta(days=1)
+        is_dia_valido = False
+
+        if data_final in afastamentos_datas:
+            pass
+        elif tipo_contagem == "dias uteis":
+            if data_final.weekday() < 5 and data_final not in feriados:
+                is_dia_valido = True
+        else:
+            is_dia_valido = True
+
+        if is_dia_valido:
+            dias_contados_susp += 1
+
+    return data_final
+
+
+def calculate_net_work_days_batch(start_date: date, end_date: date,
+                                  afastamentos_datas: set, feriados: set) -> int:
+    """Calcula dias úteis líquidos usando dados pré-carregados (batch)."""
+    if not start_date or not end_date or start_date > end_date:
+        return 0
+
+    dias_uteis_liquidos = 0
+    data_atual = start_date
+
+    while data_atual <= end_date:
+        if (data_atual.weekday() < 5
+                and data_atual not in feriados
+                and data_atual not in afastamentos_datas):
+            dias_uteis_liquidos += 1
+        data_atual += timedelta(days=1)
+
+    return dias_uteis_liquidos
+
+
+def calculate_net_duration_calendar_batch(start_date: date, end_date: date,
+                                           afastamentos_datas: set,
+                                           manual_suspension_days: int = 0) -> int:
+    """Calcula duração líquida em dias corridos usando dados pré-carregados (batch)."""
+    if not start_date or not end_date or start_date > end_date:
+        return 0
+
+    total_calendar = (end_date - start_date).days + 1
+
+    leave_days = 0
+    d = start_date
+    while d <= end_date:
+        if d in afastamentos_datas:
+            leave_days += 1
+        d += timedelta(days=1)
+
+    net_duration = total_calendar - leave_days - manual_suspension_days
+    return max(0, net_duration)
 
 def get_available_years():
     """
@@ -200,6 +290,7 @@ def _fetch_processes_for_report(end_date_iso: str):
     """
     Fetch only the columns needed for report metrics, filtered to processes
     that existed by end_date (data_atribuicao_servidor <= end_date).
+    Uses pagination to guarantee ALL records are fetched (bypasses 1000-row limit).
     Returns list of dicts.
     """
     columns = (
@@ -210,10 +301,21 @@ def _fetch_processes_for_report(end_date_iso: str):
         "data_finalizacao, nao_se_aplica_prazo_servidor, ignorar_revisao_chefe, "
         "ignorar_analise_procurador"
     )
-    return QueryBuilder("processos") \
-        .select(columns) \
-        .lte("data_atribuicao_servidor", end_date_iso) \
-        .fetch_all()
+    all_data = []
+    page_size = 1000
+    offset = 0
+    while True:
+        result = supabase.table("processos") \
+            .select(columns) \
+            .lte("data_atribuicao_servidor", end_date_iso) \
+            .range(offset, offset + page_size - 1) \
+            .execute()
+        batch = result.data if result.data else []
+        all_data.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return all_data
 
 
 def _prefetch_leave_sets(user_ids: set) -> dict:
@@ -226,7 +328,7 @@ def _prefetch_leave_sets(user_ids: set) -> dict:
     leave_map = {}
     for uid in user_ids:
         if uid is not None:
-            leave_map[uid] = get_all_leave_dates_by_user().get(uid, set()) # Changed to use get_all_leave_dates_by_user
+            leave_map[uid] = get_leave_dates_set(uid)
     return leave_map
 
 
