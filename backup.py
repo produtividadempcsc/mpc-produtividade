@@ -84,6 +84,42 @@ RESTORE_ORDER = [
     'chefe_subordinado_chefe', 'processo_favoritos', 'comentario_lido'
 ]
 
+def clean_database():
+    """
+    Limpa todas as tabelas na ordem inversa de restauração para evitar conflitos
+    de chaves estrangeiras.
+    """
+    print(f"[{datetime.now()}] AÇÃO: Limpando banco de dados antes da restauração...")
+    tables_to_clean = list(reversed(RESTORE_ORDER))
+    
+    col_map = {
+        'chefe_subordinado_chefe': 'chefe_superior_id',
+        'comentario_lido': 'id_usuario',
+        'processo_favoritos': 'id_usuario',
+        'gabinete_servidores': 'chefe_id',
+        'procurador_chefes': 'procurador_id',
+        'configuracoes': 'chave',
+        'calendario': 'data',
+        'anexos_processos': 'id'
+    }
+    
+    for table in tables_to_clean:
+        print(f"   [INFO] Apagando dados da tabela '{table}'...")
+        try:
+            pk_col = col_map.get(table, 'id')
+            
+            qb = QueryBuilder(table)
+            qb.is_not_null(pk_col)  # Deleta tudo onde a coluna não é nula
+            
+            success = qb.delete()
+            if not success:
+                print(f"   [AVISO] Nenhuma exclusão retornada em '{table}' (pode já estar vazia).")
+            else:
+                print(f"   [INFO] Tabela '{table}' limpa com sucesso.")
+        except Exception as e:
+            print(f"   [ERRO] Falha ao limpar '{table}': {e}")
+
+
 def restore_database(backup_source):
     """
     Restaura o banco de dados a partir de um arquivo Excel.
@@ -92,6 +128,9 @@ def restore_database(backup_source):
     print(f"[{datetime.now()}] AÇÃO: Iniciando restauração do banco de dados...")
     
     try:
+        # Limpar o banco primeiro
+        clean_database()
+        
         # Carregar Excel (suporta path ou buffer)
         xls = pd.ExcelFile(backup_source)
         
@@ -148,7 +187,7 @@ def restore_database(backup_source):
                             try:
                                 upsert(table, record)
                             except Exception as e_row:
-                                print(f"         [ERRO ROW] Falha no registro id={record.get('id')}: {repr(e_row)}")
+                                print(f"         [ERRO ROW] Tabela '{table}', Falha no registro id={record.get('id', 'N/A')}: {repr(e_row)}")
                             
                     success_count += 1
                     
