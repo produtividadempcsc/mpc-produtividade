@@ -474,21 +474,21 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
 
     # 1) Processos concluídos pelos servidores (por Procurador)
     m1 = df_servidor_mes.groupby('id_procurador').size() if not df_servidor_mes.empty else pd.Series(dtype=int)
-    metricas["1) Número de processos concluídos pelos pareceristas no mês (visão por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names
-    }
+    metricas["1) Número de processos concluídos pelos pareceristas no mês (visão por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m1.items() if pid in procurador_names}.items()
+    ))
 
     # 2) Média de dias (Servidor)
     m2 = df_servidor_mes.groupby('id_procurador')['duracao_servidor'].mean() if not df_servidor_mes.empty else pd.Series(dtype=float)
-    metricas["2) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m2.items() if pid in procurador_names
-    }
+    metricas["2) Média de dias que os pareceristas demoraram para concluir o processo (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m2.items() if pid in procurador_names}.items()
+    ))
 
     # 3) Percentual no prazo (Servidor)
     m3 = df_servidor_mes.groupby('id_procurador')['no_prazo_servidor'].apply(_calculate_percentage) if not df_servidor_mes.empty else pd.Series(dtype=float)
-    metricas["3) Percentual de processos concluídos no prazo por pareceristas (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m3.items() if pid in procurador_names
-    }
+    metricas["3) Percentual de processos concluídos no prazo por pareceristas (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m3.items() if pid in procurador_names}.items()
+    ))
 
     # 4) Acervo Servidor (Snapshot)
     m4_df = df_full[
@@ -500,27 +500,27 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
         )
     ]
     m4 = m4_df.groupby('id_procurador').size()
-    metricas["4) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m4.items() if pid in procurador_names
-    }
+    metricas["4) Acervo de processo não concluídos ao encerrar o mês por parecerista (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m4.items() if pid in procurador_names}.items()
+    ))
 
     # 5) Número revisados (Chefe)
     m5 = df_chefe_mes.groupby('id_procurador').size() if not df_chefe_mes.empty else pd.Series(dtype=int)
-    metricas["5) Número de processos revisados no mês por chefe de gabinete (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m5.items() if pid in procurador_names
-    }
+    metricas["5) Número de processos revisados no mês por chefe de gabinete (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m5.items() if pid in procurador_names}.items()
+    ))
 
     # 6) Média dias revisão (Chefe)
     m6 = df_chefe_mes.groupby('id_procurador')['duracao_revisao_chefe'].mean() if not df_chefe_mes.empty else pd.Series(dtype=float)
-    metricas["6) Média de dias que os chefes de gabinete demoraram para finalizar a revisão do processo (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m6.items() if pid in procurador_names
-    }
+    metricas["6) Média de dias que os chefes de gabinete demoraram para finalizar a revisão do processo (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m6.items() if pid in procurador_names}.items()
+    ))
 
     # 7) Percentual revisão no prazo (Chefe)
     m7 = df_chefe_mes.groupby('id_procurador')['no_prazo_chefe'].apply(_calculate_percentage) if not df_chefe_mes.empty else pd.Series(dtype=float)
-    metricas["7) Percentual de processos revisados pelos chefes de gabinetes no prazo (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m7.items() if pid in procurador_names
-    }
+    metricas["7) Percentual de processos revisados pelos chefes de gabinetes no prazo (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m7.items() if pid in procurador_names}.items()
+    ))
 
     # 8) Acervo Revisão Chefe (Snapshot)
     m8_df = df_full[
@@ -532,9 +532,9 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
         )
     ]
     m8 = m8_df.groupby('id_procurador').size()
-    metricas["8) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = {
-        procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names
-    }
+    metricas["8) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names}.items()
+    ))
 
     return metricas
 
@@ -594,7 +594,7 @@ def gerar_relatorio_xlsx(metricas, mes, ano):
         def format_value(v): return f"{v:.2f}" if isinstance(v, float) else v
 
         if isinstance(visoes, dict) and visoes:
-            for visao, valor in visoes.items():
+            for visao, valor in sorted(visoes.items()):
                 ws.cell(row=row_idx, column=1, value=metrica)
                 ws.cell(row=row_idx, column=2, value=str(visao))
                 ws.cell(row=row_idx, column=3, value=format_value(valor))
@@ -912,7 +912,7 @@ def calcular_metricas_periodo(ano: int, meses: list) -> dict:
                     else:
                         resultado_metrica[procurador] = sum(valores) / len(valores)
 
-                resultado[chave] = resultado_metrica
+                resultado[chave] = dict(sorted(resultado_metrica.items()))
             else:
                 resultado[chave] = modelo.get(chave, {})
 
