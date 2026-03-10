@@ -1,17 +1,13 @@
 import auth
 import streamlit as st
-import pandas as pd
 from datetime import datetime, date
 from sidebar import build_sidebar
 
 # Módulos do projeto
 import utils.ui as ui_utils
 import utils.common as common_utils
-import relatorios
-from supabase_client import select_all, QueryBuilder, insert, delete_by_id, update_by_id
-from db_compat import get_user_by_id
+from supabase_client import select_all, QueryBuilder, update_by_id
 
-import auth
 auth.auth_guard()
 
 # Inicialização do estado da sessão para visibilidade do histórico
