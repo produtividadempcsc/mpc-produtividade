@@ -1,40 +1,14 @@
 import streamlit as st
-from datetime import date, datetime, timedelta
+from datetime import date
 from supabase_client import supabase, QueryBuilder, select_all, select_by_id, select_where, select_first, insert, update_by_id, delete_by_id
 from utils.timezone import now_brazil, today_brazil
 
-from repositories.calendar_repository import get_all_holidays, is_business_day, get_holidays_only, upsert_calendar_entry
 from repositories.afastamento_repository import (
-    get_user_leaves, get_leave_dates_set, get_leave_days_for_period,
-    get_leaves_count, get_active_leaves_count, get_leaves_filtered,
-    create_leave, delete_leave, get_all_leaves_count
+    get_leave_days_for_period
 )
 
 # Re-export for external usage
 get_leave_days_for_period = get_leave_days_for_period
-from services.prazo_service import (
-    calculate_due_date, calculate_due_date_with_details,
-    calculate_calendar_days_minus_leave, calculate_net_work_days, count_business_days,
-    calculate_net_duration_calendar
-)
-
-
-# ============================================================================
-# Funções de Calendário e Feriados
-# ============================================================================
-
-
-
-
-# ============================================================================
-# Funções de Afastamento
-# ============================================================================
-
-
-
-
-
-
 
 # ============================================================================
 # Funções de Usuário
@@ -394,13 +368,6 @@ def get_direct_servants(user_id: int):
     if not ids: return []
     return QueryBuilder("usuarios").in_list("id", ids).execute()
 
-
-def get_process_comments(process_id: int):
-    """Retorna comentários de um processo ordenados por data."""
-    return QueryBuilder("comentarios") \
-        .eq("id_processo", process_id) \
-        .order("timestamp") \
-        .execute()
 
 
 def mark_comments_as_read(user_id: int, comment_ids: list):
