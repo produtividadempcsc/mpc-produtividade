@@ -251,6 +251,9 @@ with col1:
 with col2:
     f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
 
+f_ini_ts = pd.to_datetime(f_ini)
+f_fim_ts = pd.to_datetime(f_fim)
+
 with col3:
     tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
     filtro_tipos = st.multiselect("📝 Tipo de Processo", options=tipos_unicos)
@@ -263,8 +266,8 @@ df_servidor = calculate_metrics_servidor(df_master)
 df_filtered = pd.DataFrame()
 if not df_servidor.empty:
     df_filtered = df_servidor[
-        (df_servidor['data_conclusao_servidor'].dt.date >= f_ini) &
-        (df_servidor['data_conclusao_servidor'].dt.date <= f_fim)
+        (df_servidor['data_conclusao_servidor'].dt.normalize() >= f_ini_ts) &
+        (df_servidor['data_conclusao_servidor'].dt.normalize() <= f_fim_ts)
     ].copy()
     
     if filtro_tipos:
