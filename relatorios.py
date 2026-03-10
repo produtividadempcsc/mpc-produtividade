@@ -116,7 +116,20 @@ def get_available_years():
 
 def sanitize_text(text):
     if text is None: return ""
-    return str(text).encode('latin-1', 'replace').decode('latin-1')
+    text = str(text)
+    replacements = {
+        '\u2013': '-', # en dash
+        '\u2014': '-', # em dash
+        '\u2018': "'",
+        '\u2019': "'",
+        '\u201c': '"',
+        '\u201d': '"',
+        '\u2026': '...',
+        '\u00a0': ' ', # non-breaking space
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text.encode('latin-1', 'replace').decode('latin-1')
 
 class PDF(FPDF):
     def header(self):
@@ -752,8 +765,29 @@ class PDFRelatorio(FPDF):
             else:
                 valor_fmt = str(valor)
 
-            self.cell(col_w_proc,  6, sanitize_text(f'  {chave_dado}'), border=0, fill=True, align='L')
-            self.cell(col_w_valor, 6, sanitize_text(valor_fmt),          border=0, fill=True, align='C', ln=True)
+            texto_col1 = sanitize_text(f'  {chave_dado}')
+            
+            # Estimativa de altura para evitar quebra de página no meio de uma linha
+            width_txt = self.get_string_width(texto_col1)
+            linhas_estimadas = max(1, int(width_txt / (col_w_proc - 4)) + 1)
+            h_estimada = linhas_estimadas * 6
+            
+            if self.get_y() + h_estimada > self.h - self.b_margin:
+                self.add_page()
+
+            x_start = self.get_x()
+            y_start = self.get_y()
+
+            # Desenha a célula principal usando multi_cell para permitir wrap do texto
+            self.multi_cell(col_w_proc, 6, texto_col1, border=0, fill=True, align='L')
+            y_end = self.get_y()
+            h_real = y_end - y_start
+
+            # Desenha a célula com o valor preenchendo o mesmo espaço vertical
+            self.set_xy(x_start + col_w_proc, y_start)
+            self.cell(col_w_valor, h_real, sanitize_text(valor_fmt), border=0, fill=True, align='C', ln=True)
+            
+            self.set_y(y_end)
 
         # Linha de rodapé da tabela
         self.set_draw_color(*_COR_BORDA)
