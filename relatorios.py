@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, date, timedelta
-import os
 import io
 import zipfile
 from fpdf import FPDF
@@ -625,46 +624,6 @@ def calcular_metricas_mensais(mes, ano):
         print(f"ERRO DETALHADO em calcular_metricas_mensais: {e}\n{traceback.format_exc()}")
         return {}
 
-
-def gerar_relatorio_xlsx(metricas, mes, ano):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = f"Relatorio_{mes}_{ano}"
-    font_bold = Font(bold=True)
-
-    ws.cell(row=1, column=1, value="Métrica").font = font_bold
-    ws.cell(row=1, column=2, value="Visão").font = font_bold
-    ws.cell(row=1, column=3, value="Valor").font = font_bold
-    
-    row_idx = 2
-    for metrica, visoes in sorted(metricas.items()):
-        def format_value(v): return f"{v:.2f}" if isinstance(v, float) else v
-
-        if isinstance(visoes, dict) and visoes:
-            for visao, valor in sorted(visoes.items()):
-                ws.cell(row=row_idx, column=1, value=metrica)
-                ws.cell(row=row_idx, column=2, value=str(visao))
-                ws.cell(row=row_idx, column=3, value=format_value(valor))
-                row_idx += 1
-        else:
-            ws.cell(row=row_idx, column=1, value=metrica)
-            ws.cell(row=row_idx, column=3, value=format_value(visoes) if not isinstance(visoes, dict) else "N/A")
-            row_idx += 1
-            
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length: max_length = len(cell.value)
-            except: pass
-        adjusted_width = (max_length + 2)
-        ws.column_dimensions[column].width = adjusted_width
-
-    filepath = f"relatorios/Relatorio_Produtividade_{mes}_{ano}.xlsx"
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    wb.save(filepath)
-    return filepath
 
 
 # ============================================================
