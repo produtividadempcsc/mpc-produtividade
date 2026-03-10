@@ -204,6 +204,9 @@ with col1:
 with col2:
     f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
 
+f_ini_ts = pd.to_datetime(f_ini)
+f_fim_ts = pd.to_datetime(f_fim)
+
 with col3:
     tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
     filtro_tipos = st.multiselect("📝 Tipo de Processo", options=tipos_unicos)
@@ -219,28 +222,29 @@ if filtro_tipos:
 
 # Filtro de Data para Métricas de Fluxo
 df_concluidos_servidor = df_servidor_calc[
-    (df_servidor_calc['data_conclusao_servidor'].dt.date >= f_ini) &
-    (df_servidor_calc['data_conclusao_servidor'].dt.date <= f_fim)
+    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() >= f_ini_ts) &
+    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() <= f_fim_ts)
 ]
 
 df_concluidos_chefe = df_chefe_calc[
-    (df_chefe_calc['data_conclusao_chefe'].dt.date >= f_ini) &
-    (df_chefe_calc['data_conclusao_chefe'].dt.date <= f_fim)
+    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() >= f_ini_ts) &
+    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() <= f_fim_ts)
 ]
 
 # Processos Finalizados
 df_master['data_finalizacao'] = pd.to_datetime(df_master['data_finalizacao'], errors='coerce')
 df_finalizados = df_master[
-    (df_master['data_finalizacao'].dt.date >= f_ini) &
-    (df_master['data_finalizacao'].dt.date <= f_fim)
+    (df_master['data_finalizacao'].dt.normalize() >= f_ini_ts) &
+    (df_master['data_finalizacao'].dt.normalize() <= f_fim_ts)
 ]
 
 # --- Cálculo dos KPIs Globais ---
 
 # 1. Processos Registrados (Entradas)
+df_master['data_atribuicao_servidor'] = pd.to_datetime(df_master['data_atribuicao_servidor'], errors='coerce')
 df_entradas = df_master[
-    (df_master['data_atribuicao_servidor'].dt.date >= f_ini) &
-    (df_master['data_atribuicao_servidor'].dt.date <= f_fim)
+    (df_master['data_atribuicao_servidor'].dt.normalize() >= f_ini_ts) &
+    (df_master['data_atribuicao_servidor'].dt.normalize() <= f_fim_ts)
 ]
 kpi_registrados = len(df_entradas)
 
