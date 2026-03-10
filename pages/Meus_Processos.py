@@ -1,26 +1,22 @@
 import auth
 import streamlit as st
 from datetime import date, timedelta
-import os
 from sidebar import build_sidebar
 
 # Módulos do projeto
 import utils.ui as ui_utils
 import utils.common as common_utils
-import file_utils
 from forms import display_servidor_update_form
 # Migration imports
 from supabase_client import QueryBuilder, select_all
 from db_compat import (
     get_user_by_id,
-    get_product_type_by_id,
     calculate_due_date,
     calculate_due_date_with_details,
     get_user_bosses,
     get_prosecutors_linked_to_users
 )
 
-import auth
 auth.auth_guard()
 
 # ==============================================================================
