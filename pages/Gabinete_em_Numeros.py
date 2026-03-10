@@ -256,6 +256,9 @@ with col1:
 with col2:
     f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
 
+f_ini_ts = pd.to_datetime(f_ini)
+f_fim_ts = pd.to_datetime(f_fim)
+
 with col3:
     tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
     filtro_tipos = st.multiselect("📝 Tipo de Processo", options=tipos_unicos)
@@ -277,20 +280,20 @@ if filtro_tipos:
 
 # Filtro de Data para Métricas de Fluxo (Conclusões)
 df_concluidos_servidor = df_servidor_calc[
-    (df_servidor_calc['data_conclusao_servidor'].dt.date >= f_ini) &
-    (df_servidor_calc['data_conclusao_servidor'].dt.date <= f_fim)
+    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() >= f_ini_ts) &
+    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() <= f_fim_ts)
 ]
 
 df_concluidos_chefe = df_chefe_calc[
-    (df_chefe_calc['data_conclusao_chefe'].dt.date >= f_ini) &
-    (df_chefe_calc['data_conclusao_chefe'].dt.date <= f_fim)
+    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() >= f_ini_ts) &
+    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() <= f_fim_ts)
 ]
 
 # Processos Finalizados (Pelo Procurador) - Usando data_finalizacao
 df_master['data_finalizacao'] = pd.to_datetime(df_master['data_finalizacao'], errors='coerce')
 df_finalizados = df_master[
-    (df_master['data_finalizacao'].dt.date >= f_ini) &
-    (df_master['data_finalizacao'].dt.date <= f_fim)
+    (df_master['data_finalizacao'].dt.normalize() >= f_ini_ts) &
+    (df_master['data_finalizacao'].dt.normalize() <= f_fim_ts)
 ]
 
 # --- Cálculo dos KPIs ---
@@ -298,9 +301,10 @@ df_finalizados = df_master[
 # 1. Processos Registrados (Total no banco para este gabinete, independente de filtro de data de conclusão?)
 # O pedido diz: "Processos Registrados no Gabinete". Geralmente refere-se à entrada no período ou total da base.
 # Vamos assumir "Entrada no período" para ser consistente com o filtro de data (Atribuídos ao servidor no período).
+df_master['data_atribuicao_servidor'] = pd.to_datetime(df_master['data_atribuicao_servidor'], errors='coerce')
 df_entradas = df_master[
-    (df_master['data_atribuicao_servidor'].dt.date >= f_ini) &
-    (df_master['data_atribuicao_servidor'].dt.date <= f_fim)
+    (df_master['data_atribuicao_servidor'].dt.normalize() >= f_ini_ts) &
+    (df_master['data_atribuicao_servidor'].dt.normalize() <= f_fim_ts)
 ]
 kpi_registrados = len(df_entradas)
 
