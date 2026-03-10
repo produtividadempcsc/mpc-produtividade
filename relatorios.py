@@ -352,7 +352,7 @@ def _build_report_dataframe(processes: list, product_types_map: dict):
             'status_servidor': p.get('status_servidor'),
             'status_chefe': p.get('status_chefe'),
             'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis'),
-            'nome_produto': tipo_produto.get('nome', 'Não Especificado'),
+            'nome_produto': tipo_produto.get('nome_produto', 'Não Especificado'),
             'data_finalizacao': p.get('data_finalizacao'),
             'nao_se_aplica_prazo_servidor': p.get('nao_se_aplica_prazo_servidor', False),
             'ignorar_revisao_chefe': p.get('ignorar_revisao_chefe', False),
@@ -1016,12 +1016,22 @@ def gerar_relatorio_periodo_pdf(metricas: dict, ano: int, nome_periodo: str) -> 
         "6)": "Média de dias para o Chefe finalizar a revisão (por procurador)",
         "7)": "Percentual de revisões pelo Chefe concluídas no prazo",
         "8)": "Acervo não revisado pelo Chefe ao encerrar o período",
+        "9)": "Tempo médio de produção de produtos (por Procuradoria)",
+        "10)": "Tempo médio de produção (por tipo de processo/procedimento)",
     }
 
-    for numero, (chave, dados) in enumerate(sorted(metricas.items()), start=1):
-        prefixo = chave.strip()[:2]
+    def parse_metric_idx(k):
+        try:
+            return int(k.split(')')[0].strip())
+        except ValueError:
+            return 999
+
+    for numero, (chave, dados) in enumerate(sorted(metricas.items(), key=lambda x: parse_metric_idx(x[0])), start=1):
+        prefixo = chave.split(')')[0].strip() + ')'
         titulo = titulos_curtos.get(prefixo, chave.split(')')[0].strip() if ')' in chave else chave[:80])
-        pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {})
+        
+        label_col1 = "Tipo de Processo/Procedimento" if prefixo == "10)" else "Procurador(a)"
+        pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {}, label_col1=label_col1)
 
     output = pdf.output(dest='S')
     return output.encode('latin-1') if isinstance(output, str) else output
