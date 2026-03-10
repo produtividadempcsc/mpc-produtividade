@@ -352,6 +352,7 @@ def _build_report_dataframe(processes: list, product_types_map: dict):
             'status_servidor': p.get('status_servidor'),
             'status_chefe': p.get('status_chefe'),
             'tipo_contagem_prazo': tipo_produto.get('tipo_contagem_prazo', 'dias uteis'),
+            'nome_produto': tipo_produto.get('nome', 'Não Especificado'),
             'data_finalizacao': p.get('data_finalizacao'),
             'nao_se_aplica_prazo_servidor': p.get('nao_se_aplica_prazo_servidor', False),
             'ignorar_revisao_chefe': p.get('ignorar_revisao_chefe', False),
@@ -436,6 +437,25 @@ def _compute_chefe_metrics(df_full, feriados, leave_map):
                 af, row['prazo_total_dias_suspenso']
             )
 
+    def calc_duracao_total(row):
+        uid_s = row['id_servidor_responsavel']
+        uid_c = row['id_chefe_gabinete']
+        af = leave_map.get(uid_s, set()).union(leave_map.get(uid_c, set()))
+        if pd.isna(row['data_atribuicao_servidor']) or pd.isna(row['data_conclusao_chefe']):
+            return np.nan
+        if row['tipo_contagem_prazo'] == 'dias uteis':
+            return max(0, calculate_net_work_days_batch(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                af, feriados
+            ) - row['prazo_total_dias_suspenso'])
+        else:
+            return calculate_net_duration_calendar_batch(
+                row['data_atribuicao_servidor'].date(),
+                row['data_conclusao_chefe'].date(),
+                af, row['prazo_total_dias_suspenso']
+            )
+
     def calc_due(row):
         uid = row['id_chefe_gabinete']
         af = leave_map.get(uid, set())
@@ -448,6 +468,7 @@ def _compute_chefe_metrics(df_full, feriados, leave_map):
         )
 
     df['duracao_revisao_chefe'] = df.apply(calc_duracao, axis=1)
+    df['duracao_total_producao'] = df.apply(calc_duracao_total, axis=1)
     df['data_final_chefe'] = df.apply(calc_due, axis=1)
     df['no_prazo_chefe'] = df['data_conclusao_chefe'].dt.date <= df['data_final_chefe']
     return df
@@ -534,6 +555,19 @@ def _extract_metrics(df_full, df_servidor_concluido, df_chefe_concluido,
     m8 = m8_df.groupby('id_procurador').size()
     metricas["8) Acervo de processo não revisados ao encerrar o mês por chefe de gabinete (visão média por procurador)"] = dict(sorted(
         {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m8.items() if pid in procurador_names}.items()
+    ))
+
+    # 9) tempo médio de produção de produtos do MPC por Procuradoria de Contas
+    df_chefe_mes_total = df_chefe_mes.dropna(subset=['duracao_total_producao'])
+    m9 = df_chefe_mes_total.groupby('id_procurador')['duracao_total_producao'].mean() if not df_chefe_mes_total.empty else pd.Series(dtype=float)
+    metricas["9) Tempo médio de produção de produtos do MPC por Procuradoria de Contas"] = dict(sorted(
+        {procurador_names.get(pid, f"ID {pid}"): val for pid, val in m9.items() if pid in procurador_names}.items()
+    ))
+
+    # 10) tempo médio de produção de produtos do MPC por classe de processo e procedimento
+    m10 = df_chefe_mes_total.groupby('nome_produto')['duracao_total_producao'].mean() if not df_chefe_mes_total.empty else pd.Series(dtype=float)
+    metricas["10) Tempo médio de produção de produtos do MPC por classe de processo e procedimento"] = dict(sorted(
+        {nome: val for nome, val in m10.items()}.items()
     ))
 
     return metricas
@@ -678,7 +712,7 @@ class PDFRelatorio(FPDF):
         self.set_text_color(140, 140, 140)
         self.cell(0, 10, sanitize_text(f'Página {self.page_no()} / {{nb}}'), align='C')
 
-    def secao_metrica(self, numero, titulo, dados):
+    def secao_metrica(self, numero, titulo, dados, label_col1="Procurador(a)"):
         """Renderiza o título da métrica e a tabela de resultados."""
         # Título da métrica
         self.set_fill_color(*_COR_AZUL)
@@ -700,12 +734,12 @@ class PDFRelatorio(FPDF):
         self.set_font('Arial', 'B', 8)
         col_w_proc  = self.w - self.l_margin - self.r_margin - 35
         col_w_valor = 35
-        self.cell(col_w_proc,  6, sanitize_text('Procurador(a)'), border=0, fill=True, align='L')
+        self.cell(col_w_proc,  6, sanitize_text(label_col1), border=0, fill=True, align='L')
         self.cell(col_w_valor, 6, sanitize_text('Valor'),         border=0, fill=True, align='C', ln=True)
 
         # Linhas de dados
         self.set_font('Arial', '', 8)
-        for i, (procurador, valor) in enumerate(dados.items()):
+        for i, (chave_dado, valor) in enumerate(dados.items()):
             # Cores alternadas
             if i % 2 == 0:
                 self.set_fill_color(*_COR_BRANCO)
@@ -718,7 +752,7 @@ class PDFRelatorio(FPDF):
             else:
                 valor_fmt = str(valor)
 
-            self.cell(col_w_proc,  6, sanitize_text(f'  {procurador}'), border=0, fill=True, align='L')
+            self.cell(col_w_proc,  6, sanitize_text(f'  {chave_dado}'), border=0, fill=True, align='L')
             self.cell(col_w_valor, 6, sanitize_text(valor_fmt),          border=0, fill=True, align='C', ln=True)
 
         # Linha de rodapé da tabela
@@ -777,13 +811,24 @@ def gerar_relatorio_pdf(metricas: dict, mes: int, ano: int) -> bytes:
         "6)": "Média de dias para o Chefe finalizar a revisão (por procurador)",
         "7)": "Percentual de revisões pelo Chefe concluídas no prazo",
         "8)": "Acervo não revisado pelo Chefe ao encerrar o mês",
+        "9)": "Tempo médio de produção de produtos (por Procuradoria)",
+        "10)": "Tempo médio de produção (por tipo de processo/procedimento)",
     }
 
-    for numero, (chave, dados) in enumerate(sorted(metricas.items()), start=1):
-        # Obter prefixo ("1)", "2)", ...)
-        prefixo = chave.strip()[:2]
+    # Extract the numeric part to sort sequentially (1, 2, ..., 10)
+    def parse_metric_idx(k):
+        try:
+            return int(k.split(')')[0].strip())
+        except ValueError:
+            return 999
+
+    for numero, (chave, dados) in enumerate(sorted(metricas.items(), key=lambda x: parse_metric_idx(x[0])), start=1):
+        # Obter prefixo ("1)", "2)", "10)", ...)
+        prefixo = chave.split(')')[0].strip() + ')'
         titulo  = titulos_curtos.get(prefixo, chave.split(')')[0].strip() if ')' in chave else chave[:80])
-        pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {})
+        
+        label_col1 = "Tipo de Processo/Procedimento" if prefixo == "10)" else "Procurador(a)"
+        pdf.secao_metrica(numero, titulo, dados if isinstance(dados, dict) else {}, label_col1=label_col1)
 
     output = pdf.output(dest='S')
     return output.encode('latin-1') if isinstance(output, str) else output
