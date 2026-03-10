@@ -60,7 +60,6 @@ def get_supabase() -> Client:
     Retorna o cliente Supabase singleton.
     Usado em substituição ao get_db() do SQLAlchemy.
     """
-    global supabase
     if supabase is None:
         print("[SUPABASE] ERRO CRÍTICO: Tentativa de uso do cliente sem inicialização.")
         raise RuntimeError(
