@@ -341,7 +341,7 @@ if len(dates_to_check_hist) > 0:
         pct = int((i + 1) / len(dates_to_check_hist) * 100)
         prog_hist.progress(pct, text=f"Histórico de acervo: {date_ref.strftime('%m/%Y')}")
         
-        acervo_s, acervo_c = calculate_acervo_snapshot(df_master, date_ref)
+        acervo_s, acervo_c = calculate_acervo_snapshot(df_master, date_ref, filter_terminal_status=False)
         
         # Indicador 3: Métrica 8 do Relatório — Acervo NÃO revisado pelo Chefe, por Procuradoria
         if not acervo_c.empty:
