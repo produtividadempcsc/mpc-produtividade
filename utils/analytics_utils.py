@@ -195,7 +195,7 @@ def calculate_acervo_snapshot(df, data_ref_ts, filter_terminal_status=True):
             (df['data_conclusao_servidor'] > data_ref_ts)
         )
     )
-    if filter_terminal_status:
+    if filter_terminal_status and 'status_servidor' in df.columns:
         mask_serv = mask_serv & (~df['status_servidor'].isin(['Concluído', 'Finalizado']))
     
     acervo_serv = df[mask_serv].copy()
@@ -209,7 +209,7 @@ def calculate_acervo_snapshot(df, data_ref_ts, filter_terminal_status=True):
             (df['data_conclusao_chefe'] > data_ref_ts)
         )
     )
-    if filter_terminal_status:
+    if filter_terminal_status and 'status_chefe' in df.columns:
         mask_chefe = mask_chefe & (~df['status_chefe'].isin(['Revisado', 'Finalizado']))
     
     acervo_chefe = df[mask_chefe].copy()
