@@ -1,7 +1,7 @@
 import streamlit as st
 import auth
-from datetime import datetime
-from utils.timezone import now_brazil
+from datetime import datetime, timezone
+from utils.timezone import now_brazil, BRAZIL_TZ
 from sidebar import build_sidebar
 from supabase_client import QueryBuilder, insert
 from db_compat import get_user_by_id, get_process_comments, mark_comments_as_read, create_notification
@@ -111,14 +111,10 @@ else:
         
         # Calcular tempo relativo
         agora = now_brazil() # timezone-aware Brazil time
-        # Supabase returns naive ISO usually (UTC) or with offset? 
-        # Usually fromisoformat handles simple ISO. If ts is timezone aware, agora should be too.
-        # Assuming database is storing UTC or local without timezone info, or Python client handles it.
-        # Safe comparison: now_brazil() é timezone-aware (America/Sao_Paulo)
-        # Se ts for aware, a subtração funciona entre timezones diferentes.
-        # Se ts for naive, agora (now_brazil) já foi definido acima como aware.
-        if ts.tzinfo is not None:
-             agora = now_brazil() # timezone-aware, compatível com ts aware
+        # Garantir que ts é timezone-aware para subtração compatível
+        if ts.tzinfo is None:
+            # Supabase geralmente armazena em UTC; assumir UTC se naive
+            ts = ts.replace(tzinfo=timezone.utc)
         
         diff = agora - ts
         
