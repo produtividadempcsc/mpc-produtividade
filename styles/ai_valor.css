@@ -1,0 +1,544 @@
+/* ==========================================================================
+   AI Valor Fiscalizado - CSS Premium
+   ========================================================================== */
+
+/* Importação de fontes */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* Variáveis CSS para as cores do sistema */
+:root {
+    --primary-color: #9E0520;
+    --primary-dark: #7a0419;
+    --primary-light: #c41e3a;
+    --background-color: #FFFFFF;
+    --secondary-background: #F5F5F5;
+    --text-color: #262626;
+    --white: #FFFFFF;
+    --light-gray: #F8F9FA;
+    --border-color: #DEE2E6;
+    --success-color: #28A745;
+    --warning-color: #FFC107;
+    --danger-color: #DC3545;
+    --gradient-primary: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --shadow-medium: 0 8px 30px rgba(0, 0, 0, 0.12);
+    --shadow-strong: 0 12px 40px rgba(158, 5, 32, 0.2);
+}
+
+/* ==========================================================================
+   Título Principal
+   ========================================================================== */
+
+.main-title {
+    font-family: 'Inter', sans-serif;
+    color: var(--primary-color);
+    text-align: center;
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 50%, var(--primary-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+}
+
+/* ==========================================================================
+   Alerta Beta - Redesign Premium
+   ========================================================================== */
+
+.beta-alert {
+    background: linear-gradient(135deg, #FFF5F5 0%, #FFE8E8 50%, #FFD9D9 100%);
+    color: var(--primary-color);
+    padding: 2rem 2.5rem;
+    border-radius: 16px;
+    border: 2px solid var(--primary-color);
+    margin: 1.5rem 0;
+    box-shadow: 0 8px 32px rgba(158, 5, 32, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.beta-alert::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+.beta-alert::after {
+    content: '⚠️';
+    position: absolute;
+    top: 50%;
+    right: 2rem;
+    transform: translateY(-50%);
+    font-size: 3rem;
+    opacity: 0.15;
+}
+
+.beta-alert h2 {
+    font-family: 'Inter', sans-serif;
+    color: var(--primary-color);
+    font-size: 1.6rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.beta-alert p {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    margin: 0;
+    opacity: 0.9;
+    max-width: 90%;
+}
+
+/* ==========================================================================
+   Cards de Seções - Efeito Glassmorphism
+   ========================================================================== */
+
+.section-card {
+    font-family: 'Inter', sans-serif;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 2rem 2.5rem;
+    border-radius: 16px;
+    box-shadow: var(--shadow-medium), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    margin: 1.5rem 0;
+    border-left: 5px solid var(--primary-color);
+    border-right: 1px solid rgba(158, 5, 32, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.section-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--gradient-primary);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+}
+
+.section-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-strong);
+}
+
+.section-card:hover::before {
+    transform: scaleX(1);
+}
+
+.section-header {
+    font-family: 'Inter', sans-serif;
+    color: var(--primary-color);
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.section-header::before {
+    content: '';
+    width: 5px;
+    height: 28px;
+    background: var(--gradient-primary);
+    border-radius: 3px;
+    box-shadow: 2px 0 8px rgba(158, 5, 32, 0.3);
+}
+
+/* ==========================================================================
+   Info Box - Estilo Moderno
+   ========================================================================== */
+
+.info-box {
+    background: linear-gradient(135deg, #F5F5F5 0%, #ECECEC 100%);
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    border-left: 4px solid var(--primary-color);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    position: relative;
+}
+
+.info-box::before {
+    content: '💡';
+    position: absolute;
+    top: -10px;
+    left: 1rem;
+    background: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.info-box p {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    color: var(--text-color);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    font-weight: 400;
+}
+
+/* ==========================================================================
+   Área de Upload - Estilo Drag & Drop
+   ========================================================================== */
+
+.upload-area {
+    background: linear-gradient(135deg, rgba(200, 200, 200, 0.2) 0%, rgba(200, 200, 200, 0.35) 100%);
+    padding: 3rem 2rem;
+    border-radius: 16px;
+    border: 3px dashed var(--primary-color);
+    margin: 1.5rem 0;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.upload-area:hover {
+    border-color: var(--primary-light);
+    background: linear-gradient(135deg, rgba(200, 200, 200, 0.3) 0%, rgba(200, 200, 200, 0.45) 100%);
+    transform: scale(1.01);
+}
+
+/* ==========================================================================
+   Resultado da IA - Card Premium
+   ========================================================================== */
+
+.ai-result {
+    background: linear-gradient(135deg, #FAFAFA 0%, var(--white) 50%, #F5F5F5 100%);
+    padding: 2rem 2.5rem;
+    border-radius: 16px;
+    border: 2px solid var(--secondary-background);
+    margin: 1.5rem 0;
+    box-shadow: var(--shadow-medium), inset 0 2px 0 rgba(255, 255, 255, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.ai-result::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-background), var(--primary-color));
+    background-size: 200% 100%;
+    animation: gradient-slide 3s ease infinite;
+}
+
+@keyframes gradient-slide {
+    0% {
+        background-position: 0% 0%;
+    }
+
+    50% {
+        background-position: 100% 0%;
+    }
+
+    100% {
+        background-position: 0% 0%;
+    }
+}
+
+.ai-result h3 {
+    font-family: 'Inter', sans-serif;
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* ==========================================================================
+   Separadores - Gradiente Elegante
+   ========================================================================== */
+
+.custom-divider {
+    height: 3px;
+    background: linear-gradient(90deg,
+            transparent 0%,
+            var(--secondary-background) 15%,
+            var(--primary-color) 50%,
+            var(--secondary-background) 85%,
+            transparent 100%);
+    border: none;
+    margin: 2.5rem 0;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
+/* ==========================================================================
+   Botões - Estilo Premium
+   ========================================================================== */
+
+.custom-button {
+    font-family: 'Inter', sans-serif;
+    background: var(--gradient-primary);
+    color: var(--white);
+    padding: 1rem 2.5rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(158, 5, 32, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+}
+
+.custom-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.custom-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(158, 5, 32, 0.4);
+    background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
+}
+
+.custom-button:hover::before {
+    left: 100%;
+}
+
+.secondary-button {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #6C757D 0%, #5A6268 100%);
+    color: var(--white);
+    padding: 0.9rem 2rem;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+}
+
+.secondary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+}
+
+.clear-button {
+    background: linear-gradient(135deg, #DC3545 0%, #C82333 100%);
+    color: var(--white);
+    padding: 0.75rem 1.75rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+}
+
+.clear-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+}
+
+/* ==========================================================================
+   Expansores - Estilo Customizado
+   ========================================================================== */
+
+.streamlit-expanderHeader {
+    font-family: 'Inter', sans-serif !important;
+    background: linear-gradient(135deg, #F5F5F5 0%, #ECECEC 100%) !important;
+    color: var(--text-color) !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    padding: 1rem 1.25rem !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.3s ease !important;
+}
+
+.streamlit-expanderHeader:hover {
+    background: linear-gradient(135deg, #ECECEC 0%, #F5F5F5 100%) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ==========================================================================
+   Animações
+   ========================================================================== */
+
+.fade-in {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Staggered animation for multiple elements */
+.section-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.section-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.section-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+/* ==========================================================================
+   Estilização do File Uploader
+   ========================================================================== */
+
+[data-testid="stFileUploader"] {
+    background: linear-gradient(135deg, rgba(200, 200, 200, 0.15) 0%, rgba(200, 200, 200, 0.25) 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 2px dashed rgba(158, 5, 32, 0.3);
+    transition: all 0.3s ease;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(200, 200, 200, 0.2) 0%, rgba(200, 200, 200, 0.35) 100%);
+}
+
+/* ==========================================================================
+   Text Area Styling
+   ========================================================================== */
+
+[data-testid="stTextArea"] textarea {
+    font-family: 'Inter', sans-serif !important;
+    border-radius: 12px !important;
+    border: 2px solid #E0E0E0 !important;
+    padding: 1rem !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stTextArea"] textarea:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(158, 5, 32, 0.1) !important;
+}
+
+/* ==========================================================================
+   Tables inside Expander
+   ========================================================================== */
+
+.stMarkdown table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+    margin: 1rem 0;
+}
+
+.stMarkdown table th {
+    background: var(--gradient-primary);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+    text-align: left;
+}
+
+.stMarkdown table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #E0E0E0;
+    background: white;
+}
+
+.stMarkdown table tr:last-child td {
+    border-bottom: none;
+}
+
+.stMarkdown table tr:hover td {
+    background: #FFF5F5;
+}
+
+/* ==========================================================================
+   Responsividade
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .main-title {
+        font-size: 2rem;
+    }
+
+    .section-card {
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+
+    .beta-alert {
+        padding: 1.5rem;
+    }
+
+    .beta-alert::after {
+        display: none;
+    }
+
+    .custom-button,
+    .secondary-button {
+        width: 100%;
+        padding: 1rem;
+    }
+
+    .info-box::before {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   Dark Mode Support (se habilitado no Streamlit)
+   ========================================================================== */
+
+/* Dark mode removed — system uses forced light theme */
