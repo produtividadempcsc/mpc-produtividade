@@ -327,42 +327,79 @@ def initialize_restored_data():
             dt_concl_serv = parse_dt(dt_concl_serv)
             dt_atrib_serv = parse_dt(dt_atrib_serv)
 
-            if dt_concl_chefe is not None and processo.get('status_chefe') not in ["Aguardando Análise", "Revisão Atrasada", "Processo com o Procurador"]:
-                if processo.get('status_servidor') != "Finalizado":
-                    updated_fields['status_servidor'] = "Finalizado"
-                if processo.get('status_chefe') != "Finalizado":
-                    updated_fields['status_chefe'] = "Finalizado"
-                    
-            elif dt_concl_serv is not None or dt_atrib_chefe_str:
-                if processo.get('status_servidor') != "Concluído" and dt_concl_serv is not None:
+            # ============================================================
+            # LÓGICA DE STATUS CORRIGIDA (FIX: respeitar hierarquia de workflow)
+            # Hierarquia: Finalizado > Processo com o Procurador > Aguardando Análise
+            # ============================================================
+            
+            current_status_chefe = processo.get('status_chefe')
+            current_status_servidor = processo.get('status_servidor')
+            
+            # CASO 1: Processo já finalizado (ambos campos marcados)
+            if current_status_chefe == "Finalizado" and current_status_servidor == "Finalizado":
+                pass  # Manter como está
+            
+            # CASO 2: Chefe já concluiu a revisão (data_conclusao_chefe preenchida)
+            elif dt_concl_chefe is not None:
+                # Se o servidor também concluiu, marcar como Concluído
+                if dt_concl_serv is not None and current_status_servidor != "Concluído" and current_status_servidor != "Finalizado":
                     updated_fields['status_servidor'] = "Concluído"
                 
-                pid = processo.get('id')
-                # Usa devolução do procurador se houver
-                if pid in devolucoes_procurador_ativas:
-                    dt_base_chefe = date.fromisoformat(str(devolucoes_procurador_ativas[pid]['data_devolucao'])[:10])
-                else:
-                    dt_base_chefe = dt_atrib_chefe_str or dt_concl_serv
-                    if isinstance(dt_base_chefe, str): dt_base_chefe = date.fromisoformat(str(dt_base_chefe)[:10])
-                
-                data_final_chefe = calculate_due_date(
-                    start_date=dt_base_chefe,
-                    prazo_dias=prazo_chefe,
-                    tipo_contagem=produto.get('tipo_contagem_prazo'),
-                    id_usuario=processo.get('id_chefe_gabinete'),
-                    dias_suspensos=processo.get('prazo_total_dias_suspenso', 0)
-                )
-                
-                new_status_chefe = "Aguardando Análise"
-                if hoje > data_final_chefe:
-                    new_status_chefe = "Revisão Atrasada"
-                
-                if processo.get('status_chefe') != new_status_chefe:
-                    updated_fields['status_chefe'] = new_status_chefe
+                # Determinar status_chefe baseado nas flags de exceção
+                if processo.get('ignorar_analise_procurador'):
+                    # Se ignora análise do procurador → Finalizado
+                    if current_status_chefe != "Finalizado":
+                        updated_fields['status_chefe'] = "Finalizado"
+                    if current_status_servidor != "Finalizado":
+                        updated_fields['status_servidor'] = "Finalizado"
+                elif current_status_chefe == "Processo com o Procurador":
+                    pass  # Manter - chefe aprovou e enviou ao procurador
+                elif current_status_chefe not in ["Finalizado", "Processo com o Procurador"]:
+                    # Chefe concluiu mas status não reflete → enviar ao procurador
+                    updated_fields['status_chefe'] = "Processo com o Procurador"
                     
+            # CASO 3: Servidor concluiu mas chefe ainda não revisou
+            elif dt_concl_serv is not None or dt_atrib_chefe_str:
+                if dt_concl_serv is not None and current_status_servidor != "Concluído":
+                    updated_fields['status_servidor'] = "Concluído"
+                
+                # Verificar se o processo deve pular revisão do chefe
+                if processo.get('ignorar_revisao_chefe'):
+                    if processo.get('ignorar_analise_procurador'):
+                        if current_status_chefe != "Finalizado":
+                            updated_fields['status_chefe'] = "Finalizado"
+                        if current_status_servidor != "Finalizado":
+                            updated_fields['status_servidor'] = "Finalizado"
+                    else:
+                        if current_status_chefe != "Processo com o Procurador":
+                            updated_fields['status_chefe'] = "Processo com o Procurador"
+                else:
+                    # Recalcular prazo do chefe
+                    pid = processo.get('id')
+                    if pid in devolucoes_procurador_ativas:
+                        dt_base_chefe = date.fromisoformat(str(devolucoes_procurador_ativas[pid]['data_devolucao'])[:10])
+                    else:
+                        dt_base_chefe = dt_atrib_chefe_str or dt_concl_serv
+                        if isinstance(dt_base_chefe, str): dt_base_chefe = date.fromisoformat(str(dt_base_chefe)[:10])
+                    
+                    data_final_chefe = calculate_due_date(
+                        start_date=dt_base_chefe,
+                        prazo_dias=prazo_chefe,
+                        tipo_contagem=produto.get('tipo_contagem_prazo'),
+                        id_usuario=processo.get('id_chefe_gabinete'),
+                        dias_suspensos=processo.get('prazo_total_dias_suspenso', 0)
+                    )
+                    
+                    new_status_chefe = "Aguardando Análise"
+                    if hoje > data_final_chefe:
+                        new_status_chefe = "Revisão Atrasada"
+                    
+                    if current_status_chefe != new_status_chefe:
+                        updated_fields['status_chefe'] = new_status_chefe
+                    
+            # CASO 4: Nem servidor nem chefe concluíram
             else:
-                new_status_chefe = "Aguardando Análise"
-                if processo.get('status_chefe') != "Aguardando Análise":
+                if current_status_chefe not in ["Aguardando Análise", None]:
                     updated_fields['status_chefe'] = "Aguardando Análise"
                 
                 if dt_atrib_serv:
@@ -379,7 +416,7 @@ def initialize_restored_data():
                     if hoje > data_final_servidor:
                         new_status_serv = "Atrasado"
                     
-                    if processo.get('status_servidor') != new_status_serv:
+                    if current_status_servidor != new_status_serv:
                         updated_fields['status_servidor'] = new_status_serv
 
             if updated_fields:
