@@ -218,6 +218,15 @@ def restore_database(backup_source):
             else:
                 print(f"   [INFO] Tabela '{table}' não encontrada no arquivo de backup.")
 
+        # Resetar sequências de auto-incremento para evitar conflito de IDs
+        print(f"[{now_brazil()}] AÇÃO: Resetando sequências de auto-incremento...")
+        try:
+            from supabase_client import rpc
+            rpc('reset_all_sequences')
+            print(f"[{now_brazil()}] SUCESSO: Sequências resetadas.")
+        except Exception as e_seq:
+            print(f"[{now_brazil()}] AVISO: Falha ao resetar sequências: {e_seq}")
+
         if errors:
             return False, f"Restauração concluída com {len(errors)} erros. Verifique os logs."
         else:
