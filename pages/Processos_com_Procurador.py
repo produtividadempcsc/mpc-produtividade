@@ -67,11 +67,6 @@ try:
             .eq("status_chefe", "Processo com o Procurador")\
             .order("data_conclusao_chefe", desc=True)
 
-        # Filtro server-side por número do processo (busca em TODO o banco)
-        if filtro_numero_processo_proc:
-            search_clean = filtro_numero_processo_proc.strip()
-            qb.ilike_all_words("processo_numero", search_clean)
-
         processos_com_procurador = qb.execute()
 
     # Refinamento local: reordena por similaridade (fuzzy matching)
