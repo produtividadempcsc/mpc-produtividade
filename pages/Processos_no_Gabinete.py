@@ -210,11 +210,6 @@ else:
         with st.spinner("🔄 Carregando processos..."):
             qb = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe_para_acoes)
 
-            # Filtro server-side por número do processo (busca em TODO o banco)
-            if filtro_numero_processo:
-                search_clean = filtro_numero_processo.strip()
-                qb.ilike_all_words("processo_numero", search_clean)
-            
             # Note: complex OR logic (status_servidor OR status_chefe) is handled in Python below (lines 846-849)
             # The QueryBuilder doesn't support or_filter, so we fetch all and filter in Python
             
