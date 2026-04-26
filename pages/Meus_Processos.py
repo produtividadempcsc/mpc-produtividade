@@ -125,14 +125,6 @@ else:
     all_user_processes = QueryBuilder("processos").eq("id_servidor_responsavel", user_id).execute()
     processos_filtrados = all_user_processes  # Start with all user processes
     
-    # Filtro server-side por número do processo (busca em TODO o banco do usuário)
-    if filtro_numero_processo:
-        search_clean = filtro_numero_processo.strip()
-        processos_filtrados = QueryBuilder("processos")\
-            .eq("id_servidor_responsavel", user_id)\
-            .ilike_all_words("processo_numero", search_clean)\
-            .execute()
-
     # Apply filters in Python
     if filtro_status:
         processos_filtrados = [p for p in processos_filtrados if p.get('status_servidor') in filtro_status]
