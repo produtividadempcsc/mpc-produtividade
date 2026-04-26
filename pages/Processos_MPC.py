@@ -96,11 +96,6 @@ else:
         # query = db.query(Processo)
         query = QueryBuilder("processos")
 
-        # Filtro server-side por número do processo (busca em TODO o banco)
-        if filtro_numero_processo:
-            search_clean = filtro_numero_processo.strip()
-            query.ilike_all_words("processo_numero", search_clean)
-        
         if filtro_status:
             pass 
         
