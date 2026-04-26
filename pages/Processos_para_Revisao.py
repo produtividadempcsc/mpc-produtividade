@@ -88,11 +88,6 @@ else:
         with st.spinner("Carregando revisões..."):
             qb = QueryBuilder("processos").eq("id_chefe_gabinete", id_chefe).eq("status_servidor", "Concluído")
 
-            # Filtro server-side por número do processo (busca em TODO o banco)
-            if filtro_numero_processo_rev:
-                search_clean = filtro_numero_processo_rev.strip()
-                qb.ilike_all_words("processo_numero", search_clean)
-            
             if filtro_status_revisao:
                  qb.in_list("status_chefe", filtro_status_revisao)
             else:
