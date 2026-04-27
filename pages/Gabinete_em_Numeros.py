@@ -118,7 +118,7 @@ def load_gabinete_data(procurador_id):
     # A tabela processos tem 'id_procurador' - isso facilita muito!
     # Não precisamos reconstruir a hierarquia complexa para buscar os processos, basta filtrar pelo id_procurador.
     
-    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_procurador,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,data_finalizacao,prazo_servidor_aplicado,prazo_chefe_aplicado,prazo_total_dias_suspenso,nao_se_aplica_prazo_servidor,ignorar_revisao_chefe,ignorar_analise_procurador,processo_numero"
+    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_procurador,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,data_finalizacao,prazo_servidor_aplicado,prazo_chefe_aplicado,prazo_total_dias_suspenso,nao_se_aplica_prazo_servidor,ignorar_revisao_chefe,ignorar_analise_procurador,processo_numero,prazo_status"
     
     processos = QueryBuilder("processos") \
         .eq("id_procurador", procurador_id) \
@@ -547,9 +547,15 @@ if not df_acervo_atual_serv.empty:
             lambda row: calculate_due_date_safe(row), axis=1
         )
         
-    # Verificar atraso (Hoje > Data Final)
+    # Verificar atraso (Hoje > Data Final), excluindo processos com prazo suspenso
     hoje_ts = pd.Timestamp(today_brazil())
-    df_ativo_calc['esta_atrasado'] = df_ativo_calc['data_final_teorica'] < hoje_ts.date()
+    df_ativo_calc['prazo_suspenso'] = df_ativo_calc['prazo_status'].apply(
+        lambda x: x == 'Suspenso' if pd.notna(x) else False
+    )
+    df_ativo_calc['esta_atrasado'] = (
+        (df_ativo_calc['data_final_teorica'] < hoje_ts.date()) & 
+        (~df_ativo_calc['prazo_suspenso'])
+    )
     
     # Agrupar
     resumo_carga = df_ativo_calc.groupby('servidor_nome').agg(
