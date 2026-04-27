@@ -166,6 +166,10 @@ def get_servidor_status(processo: dict, db_session=None) -> str:
     if status_serv == "Devolvido":
         return "Devolvido"
 
+    # Se o prazo está suspenso, não recalcular — manter status atual
+    if processo.get('prazo_status') == 'Suspenso':
+        return status_serv if status_serv else "No Prazo"
+
     if processo.get('nao_se_aplica_prazo_servidor'):
         return "No Prazo"
 
