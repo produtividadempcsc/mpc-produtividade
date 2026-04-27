@@ -1,615 +1,610 @@
-import auth
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import date
-from sidebar import build_sidebar
-from supabase_client import QueryBuilder
-from db_compat import get_all_users
+
+from datetime import date, datetime
+from supabase_client import QueryBuilder, select_all, update_by_id
+from repositories.calendar_repository import is_business_day
 from services.prazo_service import calculate_due_date
-from utils.timezone import today_brazil
-from utils.analytics_utils import (
-    prepare_master_dataframe, calculate_metrics_servidor, 
-    calculate_metrics_chefe, calculate_acervo_snapshot
-)
-import ui_utils
+from utils.notifications import send_email_notification
+from utils.timezone import today_brazil, now_brazil
+from utils.common import get_mpc_status
+from repositories.devolucao_repository import get_devolucoes_batch
+from repositories.devolucao_procurador_chefe_repository import get_devolucoes_procurador_chefe_batch
 
-# Helper function definition needed for calculation
-def calculate_due_date_safe(row):
-    return calculate_due_date(
-        start_date=row['data_atribuicao_servidor'].date(),
-        prazo_dias=row['prazo_servidor_aplicado'],
-        tipo_contagem=row['tipo_contagem_prazo'],
-        id_usuario=row['id_servidor_responsavel'],
-        dias_suspensos=row.get('prazo_total_dias_suspenso', 0)
-    )
 
-# --- Guarda de Autenticação ---
-auth.auth_guard()
-
-# --- Cláusula de Guarda de Perfil ---
-allowed_profiles = ["Chefe de Gabinete", "Procurador"]
-current_profile = st.session_state.get("active_perfil")
-
-if current_profile not in allowed_profiles:
-    st.error("🚫 Acesso restrito a Chefes de Gabinete e Procuradores.")
-    st.stop()
-
-st.set_page_config(
-    page_title="Gabinete em Números - MPC/SC",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Carregar CSS do sistema
-ui_utils.load_css()
-
-# CSS customizado para a página (agora centralizado)
-
-st.session_state.active_page = "Gabinete em Números"
-build_sidebar()
-
-# --- Header Principal ---
-st.markdown('''
-<div style="background: linear-gradient(135deg, #9E0520 0%, #B8062A 100%); color: white; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 30px; box-shadow: 0 8px 30px rgba(158, 5, 32, 0.35);">
-    <h1 style="margin: 0; font-size: 2.4em; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">📊 Gabinete em Números</h1>
-    <p style="margin: 12px 0 0 0; font-size: 1.15em; opacity: 0.95; font-weight: 400;">Visão consolidada de produtividade e carga de trabalho do gabinete</p>
-</div>
-''', unsafe_allow_html=True)
-
-# --- Placeholder para Loading ---
-loading_placeholder = st.empty()
-
-# --- Identificação do Contexto (Hierarquia) ---
-current_user_id = st.session_state.user_id
-
-@st.cache_data(ttl=300, show_spinner=False)
-def get_gabinete_context(user_id, profile, admin_target_id=None):
-    """Identifica o Procurador alvo e todos os membros do gabinete."""
-    target_procurador_id = None
-    
-    if profile == "Procurador":
-        target_procurador_id = user_id
-    elif profile == "Chefe de Gabinete":
-        # Buscar procurador vinculado
-        link = QueryBuilder("procurador_chefes").eq("chefe_id", user_id).execute()
-        if link:
-            target_procurador_id = link[0]['procurador_id']
-    elif profile == "Administrador" and admin_target_id:
-        target_procurador_id = admin_target_id
-    
-    if not target_procurador_id:
-        return None, [], []
+def update_process_statuses():
+    """
+    Analisa todos os processos para garantir a integridade dos prazos aplicados e, em seguida,
+    atualiza os status dos processos que ainda estão ativos.
+    (Versão Supabase - OTIMIZADA com cache)
+    """
+    try:
+        print(f"[{now_brazil()}] INICIANDO JOB de verificação de prazos e status (Supabase).")
         
-    # Buscar todos os chefes vinculados a este procurador
-    chefes_links = QueryBuilder("procurador_chefes").eq("procurador_id", target_procurador_id).execute()
-    chefes_ids = [c['chefe_id'] for c in chefes_links]
-    
-    # Buscar todos os servidores vinculados a estes chefes (ou diretamente ao gabinete se houver outra tabela, 
-    # mas assumiremos a estrutura hierárquica via chefe->servidores ou todos do gabinete)
-    # Estrutura comum: Procurador -> Chefes -> Servidores
-    # Mas também precisamos pegar processos diretamente atribuídos
-    
-    # Vamos buscar TODOS os usuários e filtrar depois para garantir consistência
-    all_users = get_all_users()
-    
-    # Filtrar membros relevantes
-    # (Opcional: Refinar essa busca se o banco for muito grande)
-    
-    # Buscar servidores ATUALMENTE vinculados ao gabinete
-    servidores_atuais_ids = []
-    for chefe_id in chefes_ids:
-        servs = QueryBuilder("gabinete_servidores").eq("chefe_id", chefe_id).execute()
-        for s in servs:
-            if s['servidor_id'] not in servidores_atuais_ids:
-                servidores_atuais_ids.append(s['servidor_id'])
-    
-    return target_procurador_id, chefes_ids, all_users, servidores_atuais_ids
-
-@st.cache_data(ttl=300, show_spinner=False)
-def load_gabinete_data(procurador_id):
-    """Carrega dados de processos para todo o gabinete do procurador."""
-    if not procurador_id:
-        return [], []
+        # =======================================================================
+        # CACHE CENTRALIZADO - Carrega todos os dados necessários uma vez
+        # =======================================================================
+        todos_processos = select_all("processos")
+        todos_produtos = select_all("tipos_produto")
         
-    # Buscar processos onde o procurador é o dono do gabinete
-    # A tabela processos tem 'id_procurador' - isso facilita muito!
-    # Não precisamos reconstruir a hierarquia complexa para buscar os processos, basta filtrar pelo id_procurador.
-    
-    processos_cols = "id,status_servidor,status_chefe,id_servidor_responsavel,id_chefe_gabinete,id_procurador,id_tipo_produto,data_atribuicao_servidor,data_conclusao_servidor,data_conclusao_chefe,data_finalizacao,prazo_servidor_aplicado,prazo_chefe_aplicado,prazo_total_dias_suspenso,nao_se_aplica_prazo_servidor,ignorar_revisao_chefe,ignorar_analise_procurador,processo_numero,prazo_status"
-    
-    processos = QueryBuilder("processos") \
-        .eq("id_procurador", procurador_id) \
-        .select(processos_cols) \
-        .execute()
+        # Cache de produtos por ID
+        produtos_por_id = {p['id']: p for p in todos_produtos}
         
-    tipos = QueryBuilder("tipos_produto") \
-        .select("id,nome_produto,tipo_contagem_prazo") \
-        .execute()
+        # Cache de produtos por nome (para get_correct_version)
+        # Agrupa por nome e ordena por data_validade
+        produtos_por_nome = {}
+        for p in todos_produtos:
+            nome = p.get('nome_produto')
+            if nome not in produtos_por_nome:
+                produtos_por_nome[nome] = []
+            produtos_por_nome[nome].append(p)
         
-    return processos, tipos
-
-# Mostrar loading
-loading_placeholder.markdown('''
-<div class="loading-container">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">🔄 Consolidando dados do gabinete...</div>
-</div>
-''', unsafe_allow_html=True)
-
-# Executar cargas
-admin_target = None
-if current_profile == "Administrador":
-    # Buscar lista de procuradores para o admin selecionar
-    all_users_temp = get_all_users()
-    procuradores_opts = {u['nome_completo']: u['id'] for u in all_users_temp if u['perfil'] == 'Procurador'}
-    
-    if not procuradores_opts:
-        st.error("Nenhum procurador encontrado no sistema.")
-        st.stop()
+        # Ordena cada grupo por data_validade
+        for nome in produtos_por_nome:
+            produtos_por_nome[nome].sort(key=lambda x: x.get('data_validade', '9999-12-31'))
         
-    selected_proc_name = st.selectbox(
-        "👮‍♂️ [Modo Admin] Selecione o Gabinete para Visualizar:", 
-        options=list(procuradores_opts.keys())
-    )
-    admin_target = procuradores_opts[selected_proc_name]
-
-target_procurador_id, chefes_ids, all_users_list, servidores_atuais_ids = get_gabinete_context(current_user_id, current_profile, admin_target)
-
-if not target_procurador_id:
-    loading_placeholder.empty()
-    st.error("Não foi possível identificar o gabinete vinculado. Contate o suporte.")
-    st.stop()
-
-raw_processos, raw_tipos = load_gabinete_data(target_procurador_id)
-
-loading_placeholder.empty()
-
-if not raw_processos:
-    st.info("Nenhum processo encontrado para este gabinete.")
-    st.stop()
-
-# --- Preparação dos Dados ---
-usuarios_dict = {u['id']: u for u in all_users_list}
-tipos_dict = {t['id']: t for t in raw_tipos}
-
-df_master = prepare_master_dataframe(raw_processos, usuarios_dict, tipos_dict)
-
-# Métrica segura: garantir que colunas numéricas não tenham NaN
-cols_numericas = ['prazo_total_dias_suspenso', 'prazo_servidor_aplicado', 'prazo_chefe_aplicado']
-for col in cols_numericas:
-    if col in df_master.columns:
-        df_master[col] = df_master[col].fillna(0)
-
-# --- Filtros ---
-st.markdown("### 🎯 Filtros do Gabinete")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    hoje = today_brazil()
-    data_inicio_padrao = date(2024, 1, 1)
-    data_fim_padrao = date(hoje.year, 12, 31)
-    
-    f_ini = st.date_input("📅 Data Início", value=data_inicio_padrao, format="DD/MM/YYYY")
-
-with col2:
-    f_fim = st.date_input("📅 Data Fim", value=data_fim_padrao, format="DD/MM/YYYY")
-
-f_ini_ts = pd.to_datetime(f_ini)
-f_fim_ts = pd.to_datetime(f_fim)
-
-with col3:
-    tipos_unicos = sorted(df_master['nome_produto'].dropna().unique().tolist())
-    filtro_tipos = st.multiselect("📝 Tipo de Processo", options=tipos_unicos)
-
-# Filtro de servidores atuais (checkbox, ativo por padrão)
-filtro_servidores_atuais = st.checkbox(
-    "👥 Apenas servidores vinculados atualmente",
-    value=True,
-    help="Quando ativo, exibe dados apenas dos servidores que estão vinculados ao gabinete no momento. Desmarque para incluir servidores que já foram vinculados anteriormente."
-)
-
-if filtro_servidores_atuais and servidores_atuais_ids:
-    df_master = df_master[df_master['id_servidor_responsavel'].isin(servidores_atuais_ids)]
-
-# --- Filtragem Base (por data de conclusão ou movimentação) ---
-# Para KPIs gerais, consideramos o período selecionado.
-# Regra: data_conclusao dentro do período OU data_atribuicao (para entrada)
-
-# Vamos criar um DF filtrado para "Concluídos no Período" (Métricas de produtividade)
-df_servidor_calc = calculate_metrics_servidor(df_master)
-df_chefe_calc = calculate_metrics_chefe(df_master)
-
-# Filtrar para exibir estatísticas
-# Se o usuário selecionar um tipo, filtra tudo
-if filtro_tipos:
-    df_master = df_master[df_master['nome_produto'].isin(filtro_tipos)]
-    df_servidor_calc = df_servidor_calc[df_servidor_calc['nome_produto'].isin(filtro_tipos)]
-    df_chefe_calc = df_chefe_calc[df_chefe_calc['nome_produto'].isin(filtro_tipos)]
-
-# Filtro de Data para Métricas de Fluxo (Conclusões)
-df_concluidos_servidor = df_servidor_calc[
-    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() >= f_ini_ts) &
-    (df_servidor_calc['data_conclusao_servidor'].dt.normalize() <= f_fim_ts)
-]
-
-df_concluidos_chefe = df_chefe_calc[
-    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() >= f_ini_ts) &
-    (df_chefe_calc['data_conclusao_chefe'].dt.normalize() <= f_fim_ts)
-]
-
-# Processos Finalizados (Pelo Procurador) - Usando data_finalizacao
-df_master['data_finalizacao'] = pd.to_datetime(df_master['data_finalizacao'], errors='coerce')
-df_finalizados = df_master[
-    (df_master['data_finalizacao'].dt.normalize() >= f_ini_ts) &
-    (df_master['data_finalizacao'].dt.normalize() <= f_fim_ts)
-]
-
-# --- Cálculo dos KPIs ---
-
-# 1. Processos Registrados (Total no banco para este gabinete, independente de filtro de data de conclusão?)
-# O pedido diz: "Processos Registrados no Gabinete". Geralmente refere-se à entrada no período ou total da base.
-# Vamos assumir "Entrada no período" para ser consistente com o filtro de data (Atribuídos ao servidor no período).
-df_master['data_atribuicao_servidor'] = pd.to_datetime(df_master['data_atribuicao_servidor'], errors='coerce')
-df_entradas = df_master[
-    (df_master['data_atribuicao_servidor'].dt.normalize() >= f_ini_ts) &
-    (df_master['data_atribuicao_servidor'].dt.normalize() <= f_fim_ts)
-]
-kpi_registrados = len(df_entradas)
-
-# 2. Concluídos Servidores
-kpi_conc_serv = len(df_concluidos_servidor)
-
-# 3. Revisados Chefe
-kpi_rev_chefe = len(df_concluidos_chefe)
-
-# 4. Aprovados Procurador (REMOVIDO A PEDIDO DO USUÁRIO)
-# kpi_aprov_proc = len(df_finalizados)
-
-# 5. Acervo Servidores (Snapshot - Métrica 4 do Relatório)
-# Calcular Snapshot AGORA para o KPI de topo
-now_ts = pd.Timestamp.now()
-acervo_s_now, acervo_c_now = calculate_acervo_snapshot(df_master, now_ts)
-kpi_acervo_servidores = len(acervo_s_now)
-
-# 6. Acervo Chefes (Snapshot - Métrica 8 do Relatório)
-kpi_acervo_chefes = len(acervo_c_now)
-
-# 7. No Prazo Servidores (%) - Métrica 3 do Relatório
-pct_prazo_serv = (df_concluidos_servidor['no_prazo_servidor'].sum() / kpi_conc_serv * 100) if kpi_conc_serv > 0 else 0
-
-# 8. Percentual Prazo Chefe - Métrica 7 do Relatório
-pct_prazo_chefe = (df_concluidos_chefe['revisao_no_prazo'].sum() / kpi_rev_chefe * 100) if kpi_rev_chefe > 0 else 0
-
-# 9. Tempo Médio Servidores - Métrica 2 do Relatório
-tm_serv = df_concluidos_servidor['duracao_servidor'].mean() if not df_concluidos_servidor.empty else 0
-
-# 10. Tempo Médio Chefes - Métrica 6 do Relatório
-tm_chefe = df_concluidos_chefe['duracao_revisao_chefe'].mean() if not df_concluidos_chefe.empty else 0
-
-
-st.markdown("### 📈 KPIs do Gabinete")
-
-# Grid de KPIs (alinhado com métricas do Relatório Mensal)
-# Row 1
-k1, k2, k3 = st.columns(3)
-with k1: st.metric("📥 Processos Registrados (Entradas)", kpi_registrados, help="Processos atribuídos aos servidores neste período")
-with k2: st.metric("✅ Concluídos por Servidores", kpi_conc_serv, help="Métrica 1 do Relatório Mensal")
-with k3: st.metric("👀 Processos Revisados (Chefes)", kpi_rev_chefe, help="Métrica 5 do Relatório Mensal")
-
-# Row 2
-k4, k5, k6 = st.columns(3)
-with k4: st.metric("📂 Acervo Servidores (Pendentes)", kpi_acervo_servidores, help="Métrica 4 do Relatório Mensal — processos não concluídos pelos servidores")
-with k5: st.metric("📋 Acervo Chefes (Pend. Revisão)", kpi_acervo_chefes, help="Métrica 8 do Relatório Mensal — processos não revisados pelos chefes")
-with k6: st.metric("⏱️ Tempo Médio (Servidores)", f"{tm_serv:.1f} dias", help="Métrica 2 do Relatório Mensal")
-
-# Row 3
-k7, k8, k9 = st.columns(3)
-with k7: st.metric("⏱️ Tempo Médio de Revisão (Chefes)", f"{tm_chefe:.1f} dias", help="Métrica 6 do Relatório Mensal")
-with k8: st.metric("🎯 % Conclusão no Prazo (Serv)", f"{pct_prazo_serv:.1f}%", help="Métrica 3 do Relatório Mensal")
-with k9: st.metric("🎯 % Revisão no Prazo (Chefes)", f"{pct_prazo_chefe:.1f}%", help="Métrica 7 do Relatório Mensal")
-
-st.markdown("---")
-
-# --- Gráficos Detalhados por Servidor ---
-
-# Preparar dados agrupados por servidor
-if not df_concluidos_servidor.empty:
-    grp_serv = df_concluidos_servidor.groupby('servidor_nome').agg(
-        concluidos=('id', 'count'),
-        no_prazo=('no_prazo_servidor', 'sum'),
-        tempo_medio=('duracao_servidor', 'mean')
-    ).reset_index()
-    
-    grp_serv['pct_prazo'] = (grp_serv['no_prazo'] / grp_serv['concluidos'] * 100).fillna(0)
-    
-    # Altura dinâmica baseada no número de servidores (union de quem concluiu e quem tem acervo)
-    # Isso garante que a altura seja suficiente mesmo que alguns servidores só apareçam no gráfico de acervo
-    set_servidores = set(grp_serv['servidor_nome'].unique())
-    if not acervo_s_now.empty:
-        set_servidores.update(acervo_s_now['servidor_nome'].unique())
-    
-    num_servidores = len(set_servidores) if set_servidores else 1
-    chart_height = max(400, num_servidores * 35 + 100) # Aumentado para 35px por servidor para melhor legibilidade
-    
-    # 1) Processos concluídos por servidor (Métrica 1 do Relatório)
-    st.markdown("#### 🏆 1. Produtividade por Servidor (Concluídos)")
-    fig1 = px.bar(
-        grp_serv, 
-        x='concluidos', 
-        y='servidor_nome', 
-        orientation='h',
-        text='concluidos',
-        color='concluidos', 
-        color_continuous_scale='Greens',
-        labels={'concluidos': 'Processos Concluídos', 'servidor_nome': 'Servidor'}
-    )
-    fig1.update_traces(textposition='outside')
-    fig1.update_layout(
-        yaxis={'categoryorder': 'total ascending'}, 
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=chart_height
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-    st.markdown("---")
+        def get_correct_version_cached(original_product_id: int, reference_date):
+            """Versão otimizada que usa cache em memória"""
+            if not original_product_id or not reference_date:
+                return None
+            
+            produto_original = produtos_por_id.get(original_product_id)
+            if not produto_original:
+                return None
+            
+            nome_produto = produto_original.get('nome_produto')
+            versoes = produtos_por_nome.get(nome_produto, [])
+            
+            if not versoes:
+                return None
+            
+            ref_date_str = reference_date.isoformat() if isinstance(reference_date, date) else reference_date
+            
+            # Buscar versão com data_validade >= reference_date
+            for v in versoes:
+                if v.get('data_validade', '9999-12-31') >= ref_date_str:
+                    return v
+            
+            # Fallback: retornar a versão mais recente
+            return versoes[-1] if versoes else None
         
-    # 2) Tempo Médio por Servidor (Métrica 2 do Relatório)
-    st.markdown("#### ⏱️ 2. Tempo Médio por Servidor")
-    fig2 = px.bar(
-        grp_serv, 
-        x='tempo_medio', 
-        y='servidor_nome', 
-        orientation='h',
-        text=grp_serv['tempo_medio'].apply(lambda x: f"{x:.1f} dias"),
-        color='tempo_medio', 
-        color_continuous_scale='Reds', # Vermelho pois maior tempo é pior
-        labels={'tempo_medio': 'Tempo Médio (Dias)', 'servidor_nome': 'Servidor'}
-    )
-    fig2.update_traces(textposition='outside')
-    fig2.update_layout(
-        yaxis={'categoryorder': 'total descending'}, 
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=chart_height
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-    st.markdown("---")
-
-    # 3) Percentual no Prazo por Servidor (Métrica 3 do Relatório)
-    st.markdown("#### 🎯 3. Percentual de Processos Concluídos no Prazo por Servidor")
-    fig_prazo = px.bar(
-        grp_serv, 
-        x='pct_prazo', 
-        y='servidor_nome', 
-        orientation='h',
-        text=grp_serv['pct_prazo'].apply(lambda x: f"{x:.1f}%"),
-        color='pct_prazo', 
-        color_continuous_scale='RdYlGn', 
-        range_color=[0, 100],
-        labels={'pct_prazo': '% no Prazo', 'servidor_nome': 'Servidor'}
-    )
-    fig_prazo.update_traces(textposition='outside')
-    fig_prazo.update_layout(
-        yaxis={'categoryorder': 'total ascending'}, 
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=chart_height
-    )
-    st.plotly_chart(fig_prazo, use_container_width=True)
-    st.markdown("---")
-
-    # 4) Distribuição Detalhada (Concluido vs Acervo)
-    st.markdown("#### 📊 4. Processos Distribuídos por Servidor (Concluídos vs Aberto)")
-    
-    # Snapshot AGORA para o gráfico
-    df_chart_acervo = acervo_s_now.groupby('servidor_nome').size().reset_index(name='Em Aberto')
-    df_chart_concluidos = grp_serv[['servidor_nome', 'concluidos']].rename(columns={'concluidos': 'Concluídos'})
-    
-    # Merge
-    df_dist = pd.merge(df_chart_concluidos, df_chart_acervo, on='servidor_nome', how='outer').fillna(0)
-    df_dist['Total'] = df_dist['Concluídos'] + df_dist['Em Aberto']
-    df_dist = df_dist.sort_values('Total', ascending=True)
-    
-    # Transformar para formato longo para gráfico empilhado
-    df_dist_long = df_dist.melt(id_vars=['servidor_nome', 'Total'], value_vars=['Concluídos', 'Em Aberto'], 
-                                var_name='Estado', value_name='Quantidade')
-    
-    fig_dist = px.bar(
-        df_dist_long, 
-        y='servidor_nome', 
-        x='Quantidade', 
-        color='Estado',
-        orientation='h',
-        text='Quantidade',
-        color_discrete_map={'Concluídos': '#28a745', 'Em Aberto': '#dc3545'},
-        labels={'servidor_nome': 'Servidor', 'Quantidade': 'Processos', 'Estado': 'Situação'}
-    )
-    fig_dist.update_traces(textposition='inside')
-    fig_dist.update_layout(
-        barmode='stack', 
-        plot_bgcolor='rgba(0,0,0,0)',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    # Adicionar totais ao final da barra
-    fig_dist.add_trace(go.Scatter(
-        y=df_dist['servidor_nome'],
-        x=df_dist['Total'],
-        text=df_dist['Total'].apply(lambda x: str(int(x))),
-        mode='text',
-        textposition='middle right',
-        showlegend=False,
-        textfont=dict(color='black', size=12)
-    ))
-    
-    # Ajustar ranges para caber o texto do total e definir altura
-    max_val = df_dist['Total'].max()
-    fig_dist.update_layout(
-        xaxis_range=[0, max_val * 1.15],
-        height=chart_height
-    )
-    
-    st.plotly_chart(fig_dist, use_container_width=True)
-
-else:
-    st.info("Sem dados de conclusão de servidores para o período selecionado.")
-
-st.markdown("---")
-
-# --- Acervo Histórico (Mês a Mês) ---
-st.markdown("### 📅 Evolução do Acervo (Estoque)")
-
-# Determinar limite do gráfico: não deve ultrapassar o mês corrente
-hoje = pd.Timestamp.now()
-data_limite_hist = hoje + pd.offsets.MonthEnd(0)  # Último dia do mês corrente
-f_fim_limitado = min(pd.Timestamp(f_fim), data_limite_hist)
-
-# Função para calcular histórico (pode ser pesada, avisar usuário)
-# Vamos calcular snapshots mensais para o ano corrente ou período selecionado
-dates_to_check = pd.date_range(start=f_ini, end=f_fim_limitado, freq='ME') # Month End
-
-history_data = []
-
-if len(dates_to_check) > 0:
-    prog_bar = st.progress(0, text="Calculando histórico de acervo...")
-    
-    for i, date_ref in enumerate(dates_to_check):
-        idx = i + 1
-        pct = int(idx / len(dates_to_check) * 100)
-        prog_bar.progress(pct, text=f"Calculando histórico: {date_ref.strftime('%m/%Y')}")
+        # --- ETAPA 1: CORREÇÃO DE INTEGRIDADE DOS PRAZOS ---
+        print(f"[{now_brazil()}] ETAPA 1: Verificando integridade dos prazos...")
+        prazo_updates_count = 0
         
-        # Calcular snapshot para esta data
-        # Usamos o df_master inteiro (sem filtro de conclusão) para ver o estado nela
-        acervo_s, acervo_c = calculate_acervo_snapshot(df_master, date_ref, filter_terminal_status=False)
+        # Buscar devoluções ativas em batch para todos processos com prazo_customizado
+        ids_customizados = [p['id'] for p in todos_processos if p.get('prazo_customizado')]
+        devolucoes_ativas = get_devolucoes_batch(ids_customizados) if ids_customizados else {}
+
+        for p in todos_processos:
+            if not p.get('data_atribuicao_servidor') or not p.get('id_tipo_produto'):
+                continue
+            
+            dt_atrib = p['data_atribuicao_servidor']
+            if isinstance(dt_atrib, str):
+                dt_atrib = date.fromisoformat(dt_atrib)
+
+            produto_correto = get_correct_version_cached(p['id_tipo_produto'], dt_atrib)
+            if not produto_correto:
+                continue
+
+            updates = {}
+            
+            # Só corrigir prazo_servidor_aplicado se NÃO for customizado E não tem devolução ativa
+            has_active_dev = p['id'] in devolucoes_ativas
+            if not p.get('prazo_customizado') and not has_active_dev and p.get('prazo_servidor_aplicado') != produto_correto['prazo_servidor']:
+                updates['prazo_servidor_aplicado'] = produto_correto['prazo_servidor']
+            
+            if p.get('prazo_chefe_aplicado') != produto_correto['prazo_chefe']:
+                updates['prazo_chefe_aplicado'] = produto_correto['prazo_chefe']
+            
+            if updates:
+                print(f"[{now_brazil()}] CORREÇÃO DE PRAZO: Processo {p.get('processo_numero')} - {updates}")
+                update_by_id("processos", p['id'], updates)
+                p.update(updates)
+                prazo_updates_count += 1
         
-        history_data.append({
-            'data': date_ref,
-            'mes_ano': date_ref.strftime('%b/%Y'),
-            'Acervo Servidores': len(acervo_s),
-            'Acervo Chefes': len(acervo_c)
-        })
-    
-    prog_bar.empty()
-    
-    df_history = pd.DataFrame(history_data)
-    
-    if not df_history.empty:
-        # Gráfico de Linhas Comparativo
-        fig_hist = go.Figure()
-        fig_hist.add_trace(go.Scatter(
-            x=df_history['data'], y=df_history['Acervo Servidores'],
-            mode='lines+markers', name='Com Servidores',
-            line=dict(color='#0D47A1', width=3)
-        ))
-        fig_hist.add_trace(go.Scatter(
-            x=df_history['data'], y=df_history['Acervo Chefes'],
-            mode='lines+markers', name='Com Chefes',
-            line=dict(color='#9E0520', width=3)
-        ))
+        if prazo_updates_count > 0:
+            print(f"[{now_brazil()}] SUCESSO ETAPA 1: {prazo_updates_count} prazos corrigidos.")
+        else:
+            print(f"[{now_brazil()}] INFO ETAPA 1: Nenhum prazo precisou de correção.")
+
+        # --- ETAPA 2: ATUALIZAÇÃO DE STATUS ---
+        print(f"[{now_brazil()}] ETAPA 2: Atualizando status de processos ativos...")
+        hoje = today_brazil()
+        status_updates_count = 0
+
+        # Sub-etapa 2.1: Servidor
+        processos_servidor_ativos = [
+            p for p in todos_processos 
+            if p.get('status_servidor') in ["No Prazo", "Atrasado", "Devolvido"]
+            and p.get('prazo_status') != 'Suspenso'
+        ]
         
-        fig_hist.update_layout(
-            title="Evolução do Acervo (Final do Mês)",
-            xaxis_title="Mês",
-            yaxis_title="Processos Pendentes",
-            plot_bgcolor='rgba(0,0,0,0)',
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig_hist, use_container_width=True)
-else:
-    st.warning("Selecione um intervalo de datas maior para ver a evolução histórica.")
-
-st.markdown("---")
-
-# --- Acervo Atual Detalhado ---
-st.markdown("### 📋 Carga de Trabalho Atual (Em Aberto)")
-
-# Calcular Snapshot AGORA
-now = pd.Timestamp.now()
-# df_acervo_atual_serv foi calculado lá em cima como acervo_s_now, reutilizar
-df_acervo_atual_serv = acervo_s_now
-
-if not df_acervo_atual_serv.empty:
-    # Agrupar por servidor
-    # Métrica 1: Total Acervo
-    # Métrica 2: Atrasados (prazo excedido hoje)
-    
-    # Calcular atraso atual
-    # Precisamos recalcular o prazo para o momento atual para saber se esta atrasado HOJE
-    # A funcao calculate_metrics_servidor ja calcula 'data_final_teorica' e 'no_prazo_servidor' baseado na DATA DE CONCLUSAO
-    # Para processos EM ABERTO, precisamos comparar HOJE com data_final_teorica
-    
-    # Reutilizar logica de prazo
-    df_ativo_calc = df_acervo_atual_serv.copy()
-    
-    # Recalcular data final teorica (garantir que existe)
-    if 'data_final_teorica' not in df_ativo_calc.columns:
-        df_ativo_calc['data_final_teorica'] = df_ativo_calc.apply(
-            lambda row: calculate_due_date_safe(row), axis=1
-        )
-        
-    # Verificar atraso (Hoje > Data Final), excluindo processos com prazo suspenso
-    hoje_ts = pd.Timestamp(today_brazil())
-    df_ativo_calc['prazo_suspenso'] = df_ativo_calc['prazo_status'].apply(
-        lambda x: x == 'Suspenso' if pd.notna(x) else False
-    )
-    df_ativo_calc['esta_atrasado'] = (
-        (df_ativo_calc['data_final_teorica'] < hoje_ts.date()) & 
-        (~df_ativo_calc['prazo_suspenso'])
-    )
-    
-    # Agrupar
-    resumo_carga = df_ativo_calc.groupby('servidor_nome').agg(
-        total_acervo=('id', 'count'),
-        total_atrasado=('esta_atrasado', 'sum')
-    ).reset_index().sort_values('total_acervo', ascending=False)
-    
-    resumo_carga.columns = ['Servidor', 'Acervo Total', 'Atrasados']
-    
-    # Tabela de Carga (Com tooltip e sem gráfico lateral)
-    st.dataframe(
-        resumo_carga, 
-        hide_index=True,
-        column_config={
-            "Acervo Total": st.column_config.ProgressColumn(
-                "Total em Aberto",
-                format="%d",
-                min_value=0,
-                max_value=int(resumo_carga['Acervo Total'].max() * 1.2) if not resumo_carga.empty else 100,
-                help="Quantidade total de processos sob responsabilidade do servidor. A barra indica a carga relativa comparada aos demais membros da equipe."
-            ),
-            "Atrasados": st.column_config.NumberColumn(
-                "⚠️ Atrasados",
-                format="%d",
-                help="Processos cujo prazo já expirou."
+        for p in processos_servidor_ativos:
+            # Usando cache em vez de query
+            produto_obj = produtos_por_id.get(p['id_tipo_produto'])
+            if not produto_obj: continue
+            
+            dt_atrib = p.get('data_atribuicao_servidor')
+            if isinstance(dt_atrib, str): dt_atrib = date.fromisoformat(dt_atrib)
+            
+            # Usar dados da devolução ativa como fonte primária
+            prazo_efetivo = p.get('prazo_servidor_aplicado')
+            data_inicio_efetiva = dt_atrib
+            
+            dev = devolucoes_ativas.get(p['id'])
+            if dev:
+                prazo_efetivo = dev.get('prazo_dias', prazo_efetivo)
+                dt_dev_str = dev.get('data_devolucao')
+                if dt_dev_str:
+                    data_inicio_efetiva = date.fromisoformat(dt_dev_str) if isinstance(dt_dev_str, str) else dt_dev_str
+            
+            data_final_servidor = calculate_due_date(
+                start_date=data_inicio_efetiva,
+                prazo_dias=prazo_efetivo,
+                tipo_contagem=produto_obj.get('tipo_contagem_prazo'),
+                id_usuario=p.get('id_servidor_responsavel'),
+                dias_suspensos=p.get('prazo_total_dias_suspenso', 0),
+                nao_se_aplica_prazo=p.get('nao_se_aplica_prazo_servidor', False)
             )
-        },
-        use_container_width=True
-    )
 
-else:
-    st.info("A equipe não possui processos pendentes no momento.")
+            original_status = p.get('status_servidor')
+            novo_status = original_status
 
-# --- Metodologia ---
-st.markdown("---")
-with st.expander("ℹ️ Metodologia e Memória de Cálculo"):
-     st.markdown("""
-    ### 📝 Metodologia dos Indicadores
-    
-    Os dados apresentados consolidam as informações de **todo o gabinete** vinculado ao Procurador (incluindo todos os servidores e chefes associados).
-    
-    #### 1. KPIs Principais
-    - **Registrados:** Processos que entraram na fase de servidor (data de atribuição) dentro do período selecionado.
-    - **Concluídos Servidores:** Processos que tiveram a data de conclusão do servidor registrada no período.
-    - **Revisados Chefes:** Processos que tiveram a data de conclusão do chefe registrada no período.
-    - **Aprovados Procurador:** Processos finalizados (arquivados/enviados) no período.
-    
-    #### 2. Tempos e Prazos
-    - **Tempo Médio:** Média de dias úteis ou corridos (conforme tipo do processo) gastos para concluir a etapa, descontando suspensões.
-    - **% No Prazo:** Percentual de processos entregues antes ou na data limite calculada.
-    
-    #### 3. Acervo (Estoque)
-    - **Acervo Servidores:** Processos atualmente com servidores (não concluídos e não devolvidos).
-    - **Acervo Chefes:** Processos concluídos por servidores mas ainda não revisados pelos chefes.
-    - **Atrasados:** Processos cujo prazo calculado já venceu em relação à data de hoje.
-    """)
+            if hoje > data_final_servidor:
+                novo_status = "Atrasado"
+            else:
+                if original_status != "Devolvido":
+                    novo_status = "No Prazo"
+            
+            updates = {}
+            if novo_status != original_status:
+                updates['status_servidor'] = novo_status
+                status_updates_count += 1
+                
+            if novo_status != "Atrasado" and p.get('notificacao_atraso_enviada'):
+                updates['notificacao_atraso_enviada'] = False
+                
+            if updates:
+                update_by_id("processos", p['id'], updates)
+                print(f"[{now_brazil()}] STATUS UPDATE (Servidor): Processo {p['id']} -> {updates}")
 
+        # Sub-etapa 2.2: Chefe
+        processos_chefe_ativos = [
+            p for p in todos_processos
+            if p.get('status_chefe') in ["Aguardando Análise", "Revisão Atrasada"]
+            and p.get('prazo_status') != 'Suspenso'
+        ]
+
+        # Pre-fetch devolucoes procurador ativas
+        processo_ids_chefe = [p['id'] for p in processos_chefe_ativos]
+        devolucoes_procurador_ativas = get_devolucoes_procurador_chefe_batch(processo_ids_chefe)
+
+        for p in processos_chefe_ativos:
+            # Usando cache em vez de query
+            produto_obj = produtos_por_id.get(p['id_tipo_produto'])
+            if not produto_obj: continue
+            
+            pid = p['id']
+            
+            if pid in devolucoes_procurador_ativas:
+                dt_base_str = devolucoes_procurador_ativas[pid]['data_devolucao']
+            else:
+                dt_atribuicao_chefe = p.get('data_atribuicao_chefe')
+                dt_conclusao_serv = p.get('data_conclusao_servidor')
+                dt_base_str = dt_atribuicao_chefe or dt_conclusao_serv
+                
+            if dt_base_str and isinstance(dt_base_str, str): dt_base_str = date.fromisoformat(str(dt_base_str)[:10])
+            
+            if not dt_base_str: continue 
+
+            data_final_chefe = calculate_due_date(
+                start_date=dt_base_str,
+                prazo_dias=p.get('prazo_chefe_aplicado'),
+                tipo_contagem=produto_obj.get('tipo_contagem_prazo'),
+                id_usuario=p.get('id_chefe_gabinete'),
+                dias_suspensos=p.get('prazo_total_dias_suspenso', 0)
+            )
+
+            original_status = p.get('status_chefe')
+            novo_status = original_status
+
+            if hoje > data_final_chefe:
+                novo_status = "Revisão Atrasada"
+            else:
+                novo_status = "Aguardando Análise"
+
+            updates = {}
+            if novo_status != original_status:
+                updates['status_chefe'] = novo_status
+                status_updates_count += 1
+            
+            if novo_status != "Revisão Atrasada" and p.get('notificacao_atraso_enviada'):
+                updates['notificacao_atraso_enviada'] = False
+
+            if updates:
+                update_by_id("processos", p['id'], updates)
+                print(f"[{now_brazil()}] STATUS UPDATE (Chefe): Processo {p['id']} -> {updates}")
+
+        # Sub-etapa 2.3: Status MPC
+        print(f"[{now_brazil()}] Sub-etapa 2.3: Atualizando status MPC...")
+        mpc_updates_count = 0
+        
+        # Filtrar processos que podem ter prazo MPC (não finalizados)
+        processos_mpc = [
+            p for p in todos_processos
+            if p.get('status_chefe') != "Finalizado" and p.get('data_entrada_mpc') and p.get('prazo_mpc_dias')
+        ]
+        
+        for p in processos_mpc:
+            status_mpc_atual = p.get('status_mpc')
+            novo_status_mpc, _ = get_mpc_status(p)
+            
+            if status_mpc_atual != novo_status_mpc:
+                update_by_id("processos", p['id'], {'status_mpc': novo_status_mpc})
+                print(f"[{now_brazil()}] STATUS UPDATE (MPC): Processo {p['id']} -> {novo_status_mpc}")
+                mpc_updates_count += 1
+        
+        if mpc_updates_count > 0:
+            print(f"[{now_brazil()}] Sub-etapa 2.3: {mpc_updates_count} status MPC atualizados.")
+
+        print(f"[{now_brazil()}] JOB FINALIZADO. Total Updates: {status_updates_count + mpc_updates_count}")
+
+    except Exception as e:
+        print(f"[{now_brazil()}] ERRO NO JOB: {e}")
+
+
+def initialize_restored_data():
+    """
+    Função a ser chamada após uma restauração de backup.
+    Recalcula status e prazos para todos os processos.
+    (Versão Supabase - Batch Update)
+    """
+    try:
+        print("Iniciando pós-processamento dos dados restaurados...")
+        
+        todos_processos = select_all("processos")
+        todos_produtos = select_all("tipos_produto")
+        
+        if not todos_processos:
+            print("Nenhum processo para processar.")
+            return
+
+        produtos_map = {p['id']: p for p in todos_produtos}
+        
+        hoje = today_brazil()
+        updates = []
+        
+        # Pre-fetch all active procurador devolucoes
+        devolucoes_procurador_ativas = get_devolucoes_procurador_chefe_batch([p['id'] for p in todos_processos])
+
+        for processo in todos_processos:
+            updated_fields = {}
+            pid = processo.get('id')
+            prod_id = processo.get('id_tipo_produto')
+            produto = produtos_map.get(prod_id)
+            
+            if not prod_id:
+                if processo.get('status_servidor') != "Aguardando Definição":
+                    updated_fields['status_servidor'] = "Aguardando Definição"
+                if processo.get('status_chefe') != "Pendente":
+                    updated_fields['status_chefe'] = "Pendente"
+                
+                if updated_fields:
+                    updated_fields['id'] = pid
+                    updates.append(updated_fields)
+                continue
+
+            if not produto:
+                if processo.get('status_servidor') != "Erro de Vinculação":
+                    updated_fields['status_servidor'] = "Erro de Vinculação"
+                if processo.get('status_chefe') != "Pendente":
+                    updated_fields['status_chefe'] = "Pendente"
+                
+                if updated_fields:
+                    updated_fields['id'] = pid
+                    updates.append(updated_fields)
+                continue
+
+            prazo_serv = processo.get('prazo_servidor_aplicado')
+            prazo_chefe = processo.get('prazo_chefe_aplicado')
+            
+            if prazo_serv is None and not processo.get('prazo_customizado'):
+                updated_fields['prazo_servidor_aplicado'] = produto.get('prazo_servidor')
+                prazo_serv = produto.get('prazo_servidor')
+                
+            if prazo_chefe is None:
+                updated_fields['prazo_chefe_aplicado'] = produto.get('prazo_chefe')
+                prazo_chefe = produto.get('prazo_chefe')
+
+            dt_concl_chefe = processo.get('data_conclusao_chefe')
+            dt_concl_serv = processo.get('data_conclusao_servidor')
+            dt_atrib_serv = processo.get('data_atribuicao_servidor')
+            dt_atrib_chefe_str = processo.get('data_atribuicao_chefe')
+            
+            def parse_dt(d):
+                if isinstance(d, str): return date.fromisoformat(d[:10])
+                return d
+            
+            dt_concl_chefe = parse_dt(dt_concl_chefe)
+            dt_concl_serv = parse_dt(dt_concl_serv)
+            dt_atrib_serv = parse_dt(dt_atrib_serv)
+
+            # ============================================================
+            # LÓGICA DE STATUS CORRIGIDA (FIX: respeitar hierarquia de workflow)
+            # Hierarquia: Finalizado > Processo com o Procurador > Aguardando Análise
+            # ============================================================
+            
+            current_status_chefe = processo.get('status_chefe')
+            current_status_servidor = processo.get('status_servidor')
+            
+            # CASO 1: Processo já finalizado (ambos campos marcados)
+            if current_status_chefe == "Finalizado" and current_status_servidor == "Finalizado":
+                pass  # Manter como está
+            
+            # CASO 2: Chefe já concluiu a revisão (data_conclusao_chefe preenchida)
+            elif dt_concl_chefe is not None:
+                # Se o servidor também concluiu, marcar como Concluído
+                if dt_concl_serv is not None and current_status_servidor != "Concluído" and current_status_servidor != "Finalizado":
+                    updated_fields['status_servidor'] = "Concluído"
+                
+                # Determinar status_chefe baseado nas flags de exceção
+                if processo.get('ignorar_analise_procurador'):
+                    # Se ignora análise do procurador → Finalizado
+                    if current_status_chefe != "Finalizado":
+                        updated_fields['status_chefe'] = "Finalizado"
+                    if current_status_servidor != "Finalizado":
+                        updated_fields['status_servidor'] = "Finalizado"
+                elif current_status_chefe == "Processo com o Procurador":
+                    pass  # Manter - chefe aprovou e enviou ao procurador
+                elif current_status_chefe not in ["Finalizado", "Processo com o Procurador"]:
+                    # Chefe concluiu mas status não reflete → enviar ao procurador
+                    updated_fields['status_chefe'] = "Processo com o Procurador"
+                    
+            # CASO 3: Servidor concluiu mas chefe ainda não revisou
+            elif dt_concl_serv is not None or dt_atrib_chefe_str:
+                if dt_concl_serv is not None and current_status_servidor != "Concluído":
+                    updated_fields['status_servidor'] = "Concluído"
+                
+                # Verificar se o processo deve pular revisão do chefe
+                if processo.get('ignorar_revisao_chefe'):
+                    if processo.get('ignorar_analise_procurador'):
+                        if current_status_chefe != "Finalizado":
+                            updated_fields['status_chefe'] = "Finalizado"
+                        if current_status_servidor != "Finalizado":
+                            updated_fields['status_servidor'] = "Finalizado"
+                    else:
+                        if current_status_chefe != "Processo com o Procurador":
+                            updated_fields['status_chefe'] = "Processo com o Procurador"
+                else:
+                    # Recalcular prazo do chefe
+                    pid = processo.get('id')
+                    if pid in devolucoes_procurador_ativas:
+                        dt_base_chefe = date.fromisoformat(str(devolucoes_procurador_ativas[pid]['data_devolucao'])[:10])
+                    else:
+                        dt_base_chefe = dt_atrib_chefe_str or dt_concl_serv
+                        if isinstance(dt_base_chefe, str): dt_base_chefe = date.fromisoformat(str(dt_base_chefe)[:10])
+                    
+                    data_final_chefe = calculate_due_date(
+                        start_date=dt_base_chefe,
+                        prazo_dias=prazo_chefe,
+                        tipo_contagem=produto.get('tipo_contagem_prazo'),
+                        id_usuario=processo.get('id_chefe_gabinete'),
+                        dias_suspensos=processo.get('prazo_total_dias_suspenso', 0)
+                    )
+                    
+                    new_status_chefe = "Aguardando Análise"
+                    if hoje > data_final_chefe:
+                        new_status_chefe = "Revisão Atrasada"
+                    
+                    if current_status_chefe != new_status_chefe:
+                        updated_fields['status_chefe'] = new_status_chefe
+                    
+            # CASO 4: Nem servidor nem chefe concluíram
+            else:
+                # Não recalcular status se prazo está suspenso
+                if processo.get('prazo_status') == 'Suspenso':
+                    pass  # Manter status atual
+                else:
+                    if current_status_chefe not in ["Aguardando Análise", None]:
+                        updated_fields['status_chefe'] = "Aguardando Análise"
+                    
+                    if dt_atrib_serv:
+                        data_final_servidor = calculate_due_date(
+                            start_date=dt_atrib_serv,
+                            prazo_dias=prazo_serv,
+                            tipo_contagem=produto.get('tipo_contagem_prazo'),
+                            id_usuario=processo.get('id_servidor_responsavel'),
+                            dias_suspensos=processo.get('prazo_total_dias_suspenso', 0),
+                            nao_se_aplica_prazo=processo.get('nao_se_aplica_prazo_servidor', False)
+                        )
+                        
+                        new_status_serv = "No Prazo"
+                        if hoje > data_final_servidor:
+                            new_status_serv = "Atrasado"
+                        
+                        if current_status_servidor != new_status_serv:
+                            updated_fields['status_servidor'] = new_status_serv
+
+            if updated_fields:
+                updated_fields['id'] = pid
+                updates.append(updated_fields)
+
+        if updates:
+            print(f"Atualizando {len(updates)} processos...")
+            for update_dict in updates:
+                pid = update_dict.pop('id')
+                try:
+                    update_by_id("processos", pid, update_dict)
+                except Exception as e:
+                    print(f"Error updating process {pid}: {e}")
+        
+        print(f"Pós-processamento concluído. {len(updates)} processos atualizados.")
+        
+    except Exception as e:
+        print(f"ERRO durante a inicialização de dados restaurados: {e}")
+
+def send_deadline_notifications():
+    """
+    Envia notificações por e-mail sobre prazos vencendo e processos atrasados.
+    Apenas em dias úteis.
+    (Versão Supabase)
+    """
+    try:
+        hoje = today_brazil()
+        # Adicionado verificação de dia útil
+        if not is_business_day(hoje):
+            print(f"INFO: Hoje não é um dia útil. Nenhuma notificação de prazo será enviada.")
+            return
+
+        processos = select_all("processos")
+        
+        processos_alvo = [
+            p for p in processos 
+            if p.get('status_servidor') in ["No Prazo", "Atrasado"] or 
+               p.get('status_chefe') in ["Aguardando Análise", "Revisão Atrasada"]
+        ]
+        # Remover processos com prazo suspenso
+        processos_alvo = [p for p in processos_alvo if p.get('prazo_status') != 'Suspenso']
+
+        if not processos_alvo: return
+
+        user_ids = set()
+        type_ids = set()
+        for p in processos_alvo:
+            if p.get('id_servidor_responsavel'): user_ids.add(p['id_servidor_responsavel'])
+            if p.get('id_chefe_gabinete'): user_ids.add(p['id_chefe_gabinete'])
+            if p.get('id_tipo_produto'): type_ids.add(p['id_tipo_produto'])
+        
+        users_map = {}
+        if user_ids:
+            u_res = QueryBuilder("usuarios").in_list("id", list(user_ids)).execute()
+            users_map = {u['id']: u for u in u_res}
+            
+        types_map = {}
+        if type_ids:
+            t_res = QueryBuilder("tipos_produto").in_list("id", list(type_ids)).execute()
+            types_map = {t['id']: t for t in t_res}
+
+        # Buscar devoluções ativas de processos com prazo customizado
+        ids_custom_notif = [p.get('id') for p in processos_alvo if p.get('prazo_customizado')]
+        devolucoes_ativas_notif = get_devolucoes_batch(ids_custom_notif) if ids_custom_notif else {}
+
+        for p in processos_alvo:
+            sid = p.get('id_servidor_responsavel')
+            cid = p.get('id_chefe_gabinete')
+            tid = p.get('id_tipo_produto')
+            
+            servidor = users_map.get(sid)
+            chefe = users_map.get(cid)
+            produto = types_map.get(tid)
+
+            if not (servidor and servidor.get('email') and chefe and chefe.get('email') and produto):
+                continue
+
+            def parse_dt(d):
+                if isinstance(d, str): return date.fromisoformat(d)
+                return d
+            
+            dt_atrib = parse_dt(p.get('data_atribuicao_servidor'))
+            dt_concl = parse_dt(p.get('data_conclusao_servidor'))
+
+            # Usar dados da devolução ativa como fonte primária
+            prazo_efetivo = p.get('prazo_servidor_aplicado')
+            data_inicio_efetiva = dt_atrib
+            
+            dev = devolucoes_ativas_notif.get(p.get('id'))
+            if dev:
+                prazo_efetivo = dev.get('prazo_dias', prazo_efetivo)
+                dt_dev_str = dev.get('data_devolucao')
+                if dt_dev_str:
+                    data_inicio_efetiva = date.fromisoformat(dt_dev_str) if isinstance(dt_dev_str, str) else dt_dev_str
+
+            # --- Notificação para Servidor ---
+            if p.get('status_servidor') in ["No Prazo", "Atrasado"] and servidor.get('notifica_email_prazos'):
+                data_final_servidor = calculate_due_date(
+                    start_date=data_inicio_efetiva, 
+                    prazo_dias=prazo_efetivo, 
+                    tipo_contagem=produto.get('tipo_contagem_prazo'), 
+                    id_usuario=sid, 
+                    dias_suspensos=p.get('prazo_total_dias_suspenso', 0),
+                    nao_se_aplica_prazo=p.get('nao_se_aplica_prazo_servidor', False)
+                )
+                
+                notif_env = p.get('notificacao_atraso_enviada')
+                p_num = p.get('processo_numero')
+                
+                if data_final_servidor < hoje and not notif_env:
+                    assunto = f'Processo Atrasado: {p_num}'
+                    corpo = f'O processo nº {p_num} está atrasado. O prazo era {data_final_servidor.strftime("%d/%m/%Y")}.'
+                    send_email_notification(servidor.get('email'), assunto, corpo)
+                    update_by_id("processos", p['id'], {'notificacao_atraso_enviada': True})
+                    p['notificacao_atraso_enviada'] = True
+                    
+                elif data_final_servidor == hoje:
+                    assunto = f'Lembrete de Prazo: Processo {p_num}'
+                    corpo = f'Lembrete: O processo nº {p_num} vence hoje, {data_final_servidor.strftime("%d/%m/%Y")}.'
+                    send_email_notification(servidor.get('email'), assunto, corpo)
+            
+            # --- Notificação para Chefe ---
+            dt_base_revisao = p.get('data_atribuicao_chefe') or p.get('data_conclusao_servidor')
+            if dt_base_revisao and isinstance(dt_base_revisao, str): dt_base_revisao = date.fromisoformat(str(dt_base_revisao)[:10])
+            
+            if p.get('status_chefe') in ["Aguardando Análise", "Revisão Atrasada"] and dt_base_revisao:
+                data_final_revisao = calculate_due_date(
+                    start_date=dt_base_revisao, 
+                    prazo_dias=p.get('prazo_chefe_aplicado'), 
+                    tipo_contagem=produto.get('tipo_contagem_prazo'), 
+                    id_usuario=cid,
+                    dias_suspensos=p.get('prazo_total_dias_suspenso', 0)
+                )
+                
+                notif_env = p.get('notificacao_atraso_enviada')
+                p_num = p.get('processo_numero')
+
+                if data_final_revisao < hoje and not notif_env:
+                    assunto = f'Revisão de Processo Atrasada: {p_num}'
+                    corpo = f'A revisão do processo nº {p_num} está atrasada. O prazo era {data_final_revisao.strftime("%d/%m/%Y")}.'
+                    send_email_notification(chefe.get('email'), assunto, corpo)
+                    update_by_id("processos", p['id'], {'notificacao_atraso_enviada': True})
+                    
+                elif data_final_revisao == hoje:
+                    assunto = f'Lembrete de Prazo de Revisão: {p_num}'
+                    corpo = f'Lembrete: A revisão do processo nº {p_num} vence hoje, {data_final_revisao.strftime("%d/%m/%Y")}.'
+                    send_email_notification(chefe.get('email'), assunto, corpo)
+        
+    except Exception as e:
+        print(f"ERRO CRÍTICO ao enviar notificações de prazo: {e}")
+
+
+def cleanup_old_notifications():
+    """
+    Remove notificações lidas há mais de 30 dias para manter o banco enxuto.
+    """
+    try:
+        from datetime import timedelta
+        cutoff = (now_brazil() - timedelta(days=30)).isoformat()
+        
+        # Buscar IDs das notificações antigas lidas
+        old_notifs = QueryBuilder("notificacoes") \
+            .eq("lida", True) \
+            .lt("timestamp", cutoff) \
+            .select("id") \
+            .execute()
+        
+        if not old_notifs:
+            print(f"[{now_brazil()}] Limpeza de notificações: nenhuma notificação antiga encontrada.")
+            return 0
+        
+        # Deletar em batches
+        count = 0
+        for n in old_notifs:
+            from supabase_client import delete_by_id
+            delete_by_id("notificacoes", n['id'])
+            count += 1
+        
+        print(f"[{now_brazil()}] Limpeza de notificações: {count} notificações antigas removidas.")
+        return count
+        
+    except Exception as e:
+        print(f"ERRO ao limpar notificações antigas: {e}")
+        return 0
