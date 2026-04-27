@@ -116,6 +116,7 @@ def update_process_statuses():
         processos_servidor_ativos = [
             p for p in todos_processos 
             if p.get('status_servidor') in ["No Prazo", "Atrasado", "Devolvido"]
+            and p.get('prazo_status') != 'Suspenso'
         ]
         
         for p in processos_servidor_ativos:
@@ -171,6 +172,7 @@ def update_process_statuses():
         processos_chefe_ativos = [
             p for p in todos_processos
             if p.get('status_chefe') in ["Aguardando Análise", "Revisão Atrasada"]
+            and p.get('prazo_status') != 'Suspenso'
         ]
 
         # Pre-fetch devolucoes procurador ativas
@@ -399,25 +401,29 @@ def initialize_restored_data():
                     
             # CASO 4: Nem servidor nem chefe concluíram
             else:
-                if current_status_chefe not in ["Aguardando Análise", None]:
-                    updated_fields['status_chefe'] = "Aguardando Análise"
-                
-                if dt_atrib_serv:
-                    data_final_servidor = calculate_due_date(
-                        start_date=dt_atrib_serv,
-                        prazo_dias=prazo_serv,
-                        tipo_contagem=produto.get('tipo_contagem_prazo'),
-                        id_usuario=processo.get('id_servidor_responsavel'),
-                        dias_suspensos=processo.get('prazo_total_dias_suspenso', 0),
-                        nao_se_aplica_prazo=processo.get('nao_se_aplica_prazo_servidor', False)
-                    )
+                # Não recalcular status se prazo está suspenso
+                if processo.get('prazo_status') == 'Suspenso':
+                    pass  # Manter status atual
+                else:
+                    if current_status_chefe not in ["Aguardando Análise", None]:
+                        updated_fields['status_chefe'] = "Aguardando Análise"
                     
-                    new_status_serv = "No Prazo"
-                    if hoje > data_final_servidor:
-                        new_status_serv = "Atrasado"
-                    
-                    if current_status_servidor != new_status_serv:
-                        updated_fields['status_servidor'] = new_status_serv
+                    if dt_atrib_serv:
+                        data_final_servidor = calculate_due_date(
+                            start_date=dt_atrib_serv,
+                            prazo_dias=prazo_serv,
+                            tipo_contagem=produto.get('tipo_contagem_prazo'),
+                            id_usuario=processo.get('id_servidor_responsavel'),
+                            dias_suspensos=processo.get('prazo_total_dias_suspenso', 0),
+                            nao_se_aplica_prazo=processo.get('nao_se_aplica_prazo_servidor', False)
+                        )
+                        
+                        new_status_serv = "No Prazo"
+                        if hoje > data_final_servidor:
+                            new_status_serv = "Atrasado"
+                        
+                        if current_status_servidor != new_status_serv:
+                            updated_fields['status_servidor'] = new_status_serv
 
             if updated_fields:
                 updated_fields['id'] = pid
@@ -457,6 +463,8 @@ def send_deadline_notifications():
             if p.get('status_servidor') in ["No Prazo", "Atrasado"] or 
                p.get('status_chefe') in ["Aguardando Análise", "Revisão Atrasada"]
         ]
+        # Remover processos com prazo suspenso
+        processos_alvo = [p for p in processos_alvo if p.get('prazo_status') != 'Suspenso']
 
         if not processos_alvo: return
 
