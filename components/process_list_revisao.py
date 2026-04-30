@@ -24,6 +24,9 @@ def render_revisao_process_list(processos_ordenados, unread_comments_cache):
         processo = item["processo"]
         p_id = processo['id']
         status_geral = processo.get('status_chefe')
+        if processo.get('prazo_status') == 'Suspenso':
+            if status_geral == "Revisão Atrasada": status_geral = "Aguardando Análise"
+            
         status_icon = ui_utils.get_status_emoji(status_geral)
         priority_icon = get_priority_icon(processo.get('prioridade'))
         tem_nao_lidos = unread_comments_cache.get(p_id, False)
@@ -34,7 +37,11 @@ def render_revisao_process_list(processos_ordenados, unread_comments_cache):
         
         st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
         
-        prazo_info = f"📅 {item['data_final_ajustada'].strftime('%d/%m/%Y')}"
+        if processo.get('prazo_status') == 'Suspenso':
+            prazo_info = "⏸️ Prazo Suspenso"
+        else:
+            prazo_info = f"📅 {item['data_final_ajustada'].strftime('%d/%m/%Y')}"
+            
         servidor_info = f"👤 {item['servidor_nome']}"
         
         st.markdown(f"""
