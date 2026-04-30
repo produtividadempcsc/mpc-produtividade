@@ -39,7 +39,9 @@ def render_process_list(displayed_items, hoje):
         
         # Header
         prazo_text = ""
-        if item['prazo_restante'] != float('inf') and item.get('data_final'):
+        if p.get('prazo_status') == 'Suspenso':
+            prazo_text = "⏸️ Prazo Suspenso"
+        elif item['prazo_restante'] != float('inf') and item.get('data_final'):
             prazo_text = f"Prazo: {item['prazo_restante']} dias (vence {item['data_final'].strftime('%d/%m/%Y')})"
         
         servidor_badge = f'<span style="font-size:0.85em;color:#555;padding:4px 10px;background:#f0f0f0;border-radius:6px;">👤 {item["servidor_nome"]}</span>'
