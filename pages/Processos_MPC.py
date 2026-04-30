@@ -189,8 +189,12 @@ else:
                 prazo = prazo_servidor
                 id_usuario = id_serv
             
-            data_final, ajuste = calculate_due_date_with_details(data_inicio, prazo, tipo_contagem, id_usuario, dias_suspensos=dias_suspensos)
-            dados["dias_restantes"] = (data_final - hoje).days if data_final else float('inf')
+            # Se prazo está suspenso, não calcular atraso
+            if p.get('prazo_status') == 'Suspenso':
+                dados["dias_restantes"] = float('inf')
+            else:
+                data_final, ajuste = calculate_due_date_with_details(data_inicio, prazo, tipo_contagem, id_usuario, dias_suspensos=dias_suspensos)
+                dados["dias_restantes"] = (data_final - hoje).days if data_final else float('inf')
             
             # Armazena também os dados detalhados para não recalcular na exibição
             if not p.get('nao_se_aplica_prazo_servidor'):
