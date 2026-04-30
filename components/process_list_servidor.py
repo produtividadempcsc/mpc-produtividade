@@ -68,6 +68,10 @@ def render_servidor_process_list(paginated_items, all_product_types_map, users_m
                 prazo_info = "⏰ Não se aplica"
                 servidor_info = ""
                 devolucao_info = None
+            elif processo.get('prazo_status') == 'Suspenso':
+                prazo_info = "⏸️ Prazo Suspenso"
+                servidor_info = ""
+                devolucao_info = None
             else:
                 produto_obj = all_product_types_map.get(processo.get('id_tipo_produto'))
                 data_atrib_str = processo.get('data_atribuicao_servidor')
