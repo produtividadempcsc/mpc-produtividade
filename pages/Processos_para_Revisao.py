@@ -147,14 +147,20 @@ else:
             else:
                 dt_conclusao_servidor = dt_base_revisao
             
-            data_final_ajustada, ajuste = calculate_due_date_with_details(
-                dt_base_revisao, 
-                p.get('prazo_chefe_aplicado', 0), 
-                produto_obj.get('tipo_contagem_prazo', 'dias uteis'), 
-                p.get('id_chefe_gabinete'), 
-                dias_suspensos=p.get('prazo_total_dias_suspenso', 0)
-            )
-            dias_restantes = (data_final_ajustada - hoje).days
+            # Se prazo está suspenso, não calcular atraso
+            if p.get('prazo_status') == 'Suspenso':
+                dias_restantes = float('inf')
+                data_final_ajustada = None
+                ajuste = 0
+            else:
+                data_final_ajustada, ajuste = calculate_due_date_with_details(
+                    dt_base_revisao, 
+                    p.get('prazo_chefe_aplicado', 0), 
+                    produto_obj.get('tipo_contagem_prazo', 'dias uteis'), 
+                    p.get('id_chefe_gabinete'), 
+                    dias_suspensos=p.get('prazo_total_dias_suspenso', 0)
+                )
+                dias_restantes = (data_final_ajustada - hoje).days
             
             processos_com_dados.append({
                 "processo": p,
