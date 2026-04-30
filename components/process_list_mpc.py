@@ -25,6 +25,10 @@ def render_mpc_process_list(paginated_items):
         nao_aplica = processo.get('nao_se_aplica_prazo_servidor')
         
         status_geral = status_chef if conclusao_dt else status_serv
+        if processo.get('prazo_status') == 'Suspenso':
+            if status_geral == "Atrasado": status_geral = "No Prazo"
+            if status_geral == "Revisão Atrasada": status_geral = "Aguardando Análise"
+            
         status_icon = ui_utils.get_status_emoji(status_geral)
         priority_icon = get_priority_icon(prioridade)
         tem_nao_lidos = common_utils.has_unread_comments(pid, st.session_state.user_id)
@@ -40,7 +44,10 @@ def render_mpc_process_list(paginated_items):
         st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
         
         # Header do processo
-        if conclusao_dt:
+        if processo.get('prazo_status') == 'Suspenso':
+            prazo_info = "⏸️ Prazo Suspenso"
+            servidor_info = f"👤 {item['servidor_nome']}"
+        elif conclusao_dt:
             if status_geral in ["Aguardando Análise", "Revisão Atrasada"]:
                 prazo_info = f"📅 {item['data_final_revisao_ajustada'].strftime('%d/%m/%Y')}"
                 servidor_info = "Em revisão"
