@@ -189,6 +189,11 @@ else:
                 if dt_dev_str:
                     data_inicio_efetiva = date.fromisoformat(dt_dev_str) if isinstance(dt_dev_str, str) else dt_dev_str
         
+        # Se prazo está suspenso, não calcular atraso
+        if p.get('prazo_status') == 'Suspenso':
+            processos_com_prazo.append((p, float('inf')))
+            continue
+
         data_final = calculate_due_date(
             data_inicio_efetiva, 
             prazo_efetivo, 
