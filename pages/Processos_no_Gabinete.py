@@ -297,6 +297,11 @@ else:
                     dados["prazo_restante"] = float('inf')
                     dados["data_final"] = None
                     dados["prazo_status"] = "N/A"
+                elif p.get('prazo_status') == 'Suspenso':
+                    # Prazo suspenso: não calcular atraso, forçar status visual "No Prazo"
+                    dados["prazo_restante"] = float('inf')
+                    dados["data_final"] = None
+                    dados["status_servidor"] = "No Prazo"
                 elif p.get('status_servidor') in ["Concluído", "Finalizado"]:
                      dados["prazo_restante"] = float('inf')
                      dados["data_final"] = None
