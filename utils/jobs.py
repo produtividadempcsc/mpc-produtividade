@@ -112,6 +112,22 @@ def update_process_statuses():
         hoje = today_brazil()
         status_updates_count = 0
 
+        # Sub-etapa 2.0: Corrigir processos suspensos indevidamente marcados como atrasados
+        processos_suspensos = [
+            p for p in todos_processos
+            if p.get('prazo_status') == 'Suspenso'
+        ]
+        for p in processos_suspensos:
+            updates_susp = {}
+            if p.get('status_servidor') == 'Atrasado':
+                updates_susp['status_servidor'] = 'No Prazo'
+            if p.get('status_chefe') == 'Revisão Atrasada':
+                updates_susp['status_chefe'] = 'Aguardando Análise'
+            if updates_susp:
+                update_by_id("processos", p['id'], updates_susp)
+                print(f"[{now_brazil()}] CORREÇÃO SUSPENSÃO: Processo {p['id']} -> {updates_susp}")
+                status_updates_count += 1
+
         # Sub-etapa 2.1: Servidor
         processos_servidor_ativos = [
             p for p in todos_processos 
