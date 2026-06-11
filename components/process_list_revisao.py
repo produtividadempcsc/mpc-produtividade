@@ -87,16 +87,24 @@ def render_revisao_process_list(processos_ordenados, unread_comments_cache):
                 status_geral
             ), unsafe_allow_html=True)
 
-            data_final_revisao = item["data_final_ajustada"] - timedelta(days=item["ajuste"])
-            st.markdown(f"""
-            <div class="detail-item">
-                <div class="detail-label">Prazo de Revisão</div>
-                <div class="detail-value">
-                    {data_final_revisao.strftime('%d/%m/%Y')} + {item['ajuste']} dias = 
-                    <strong>{item['data_final_ajustada'].strftime('%d/%m/%Y')}</strong>
+            if item["data_final_ajustada"] is not None:
+                data_final_revisao = item["data_final_ajustada"] - timedelta(days=item["ajuste"])
+                st.markdown(f"""
+                <div class="detail-item">
+                    <div class="detail-label">Prazo de Revisão</div>
+                    <div class="detail-value">
+                        {data_final_revisao.strftime('%d/%m/%Y')} + {item['ajuste']} dias = 
+                        <strong>{item['data_final_ajustada'].strftime('%d/%m/%Y')}</strong>
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="detail-item">
+                    <div class="detail-label">Prazo de Revisão</div>
+                    <div class="detail-value">⏸️ Prazo Suspenso</div>
+                </div>
+                """, unsafe_allow_html=True)
 
             if processo.get('observacao_chefe'):
                 st.markdown(f"""
