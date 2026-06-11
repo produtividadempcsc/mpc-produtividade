@@ -109,7 +109,7 @@ def render_mpc_process_list(paginated_items):
                 status_geral
             ), unsafe_allow_html=True)
 
-            if not nao_aplica and 'data_final_servidor_ajustada' in item:
+            if not nao_aplica and item.get('data_final_servidor_ajustada') is not None:
                 data_final_servidor = item["data_final_servidor_ajustada"] - timedelta(days=item["ajuste_servidor"])
                 st.markdown(f"""
                 <div class="detail-item">
@@ -121,7 +121,7 @@ def render_mpc_process_list(paginated_items):
                 </div>
                 """, unsafe_allow_html=True)
 
-            if conclusao_dt and 'data_final_revisao_ajustada' in item:
+            if conclusao_dt and item.get('data_final_revisao_ajustada') is not None:
                 data_final_revisao = item["data_final_revisao_ajustada"] - timedelta(days=item["ajuste_revisao"])
                 st.markdown(f"""
                 <div class="detail-item">
