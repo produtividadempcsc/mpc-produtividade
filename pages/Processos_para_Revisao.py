@@ -155,12 +155,15 @@ else:
             else:
                 data_final_ajustada, ajuste = calculate_due_date_with_details(
                     dt_base_revisao, 
-                    p.get('prazo_chefe_aplicado', 0), 
+                    p.get('prazo_chefe_aplicado') or 0, 
                     produto_obj.get('tipo_contagem_prazo', 'dias uteis'), 
                     p.get('id_chefe_gabinete'), 
-                    dias_suspensos=p.get('prazo_total_dias_suspenso', 0)
+                    dias_suspensos=p.get('prazo_total_dias_suspenso') or 0
                 )
-                dias_restantes = (data_final_ajustada - hoje).days
+                if data_final_ajustada is not None:
+                    dias_restantes = (data_final_ajustada - hoje).days
+                else:
+                    dias_restantes = float('inf')
             
             processos_com_dados.append({
                 "processo": p,
