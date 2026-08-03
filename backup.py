@@ -170,6 +170,39 @@ def restore_database(backup_source):
                     # Converter para object evita que None vire NaN em colunas numéricas
                     df = df.astype(object).where(pd.notnull(df), None)
                     
+                    # 1.5 Corrigir colunas inteiras que contenham valores booleanos ou strings corrompidas
+                    # Ex: prazo_total_dias_suspenso pode ter False/True/strings ao invés de int
+                    INT_COLUMNS_FIX = {
+                        'processos': ['prazo_total_dias_suspenso'],
+                    }
+                    if table in INT_COLUMNS_FIX:
+                        for int_col in INT_COLUMNS_FIX[table]:
+                            if int_col in df.columns:
+                                def _safe_to_int(val):
+                                    if val is None:
+                                        return None
+                                    if isinstance(val, bool):
+                                        return int(val)  # False->0, True->1
+                                    if isinstance(val, (int, float)):
+                                        try:
+                                            return int(val)
+                                        except (ValueError, OverflowError):
+                                            return 0
+                                    # Tratar strings corrompidas como 'VERDADEIROFALSOVERDADEIRO'
+                                    s = str(val).strip().upper()
+                                    if s in ('FALSE', 'FALSO'):
+                                        return 0
+                                    if s in ('TRUE', 'VERDADEIRO'):
+                                        return 1
+                                    # Tentar extrair número de strings como 'VERDADEIRO4'
+                                    import re
+                                    nums = re.findall(r'\d+', s)
+                                    if nums:
+                                        return int(nums[-1])
+                                    return 0
+                                df[int_col] = df[int_col].apply(_safe_to_int)
+                                print(f"      [FIX] Coluna '{int_col}' sanitizada (bool/str -> int).")
+                    
                     # 2. Converter datas (se houver colunas de data que ficaram como objeto/timestamp)
                     # O pandas read_excel chupa datas como Timestamp, que o supabase-py serializa bem,
                     # mas às vezes precisa de conversão para string ISO.
@@ -185,11 +218,37 @@ def restore_database(backup_source):
                              df[col] = df[col].apply(lambda x: x.isoformat() if pd.notnull(x) else None)
                             
                     records = df.to_dict(orient='records')
+
+                    # ------------------------------------------------------------------
+                    # FIX: Filtrar registros com campos NOT NULL obrigatorios faltando
+                    # Evita erros como "null value in column 'processo_numero' violates
+                    # not-null constraint" durante INSERT/UPSERT na restauracao.
+                    # ------------------------------------------------------------------
+                    NOT_NULL_FIELDS = {
+                        "processos": ["processo_numero", "status_servidor", "status_chefe"],
+                        "usuarios": ["login", "nome_completo", "perfil", "senha_hash"],
+                    }
+                    mandatory = NOT_NULL_FIELDS.get(table, [])
+                    if mandatory:
+                        valid_records = []
+                        skipped = 0
+                        for r in records:
+                            missing = [f for f in mandatory if r.get(f) is None]
+                            if missing:
+                                skipped += 1
+                            else:
+                                valid_records.append(r)
+                        if skipped > 0:
+                            print(f"      [AVISO] {skipped} registros ignorados em '{table}' (campos obrigatorios nulos: {mandatory})")
+                        records = valid_records
+
                     count = len(records)
                     print(f"   [INFO] Restaurando '{table}' ({count} registros)...")
-                    if records:
-                        # print(f"      [DEBUG] Exemplo: {str(records[0])[:200]}...")
-                        pass
+                    
+                    if not records:
+                        success_count += 1
+                        continue
+
                     # Usando insert direto para capturar exceções de lote
                     # (Como a base foi limpa, podemos usar insert. O upsert escondia o erro)
                     try:
@@ -201,13 +260,18 @@ def restore_database(backup_source):
                         print(f"      [AVISO] Falha no insert em lote para '{table}'. Erro: {repr(e_batch)}")
                         print(f"      [AVISO] Tentando linha a linha (com upsert)...")
                         # Fallback linha a linha
+                        failed_upserts = 0
                         for record in records:
                             try:
                                 res_row = upsert(table, record)
                                 if res_row is None:
-                                     print(f"         [ERRO ROW] Tabela '{table}', registro id={record.get('id', 'N/A')} falhou (erro exibido pelo client).")
+                                    failed_upserts += 1
+                                    print(f"         [ERRO ROW] Tabela '{table}', registro id={record.get('id', 'N/A')} falhou (erro exibido pelo client).")
                             except Exception as e_row:
+                                failed_upserts += 1
                                 print(f"         [ERRO ROW] Tabela '{table}', Falha inesperada no registro id={record.get('id', 'N/A')}: {repr(e_row)}")
+                        if failed_upserts > 0:
+                            errors.append(f"Tabela '{table}': {failed_upserts} registros falharam no upsert linha a linha")
                             
                     success_count += 1
                     
