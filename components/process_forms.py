@@ -10,6 +10,75 @@ def render_add_process_form(id_chefe_para_acoes, chefe_logado, equipe_atribuivel
     """Renderiza o formulário de cadastro e atribuição de um novo processo."""
     with st.expander("➕ Adicionar Novo Processo", expanded=False):
         with st.form("new_process_form", clear_on_submit=True):
+            
+            # CSS inline para corrigir selectboxes dentro deste formulario
+            st.markdown("""
+            <style>
+            #new_process_form div[data-baseweb="select"] > div {
+                background-color: #FFFFFF !important;
+                border: 2px solid #E0E0E0 !important;
+                border-radius: 8px !important;
+                min-height: 44px !important;
+                height: 44px !important;
+                max-height: 44px !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+            }
+            #new_process_form div[data-baseweb="select"] > div:hover {
+                border-color: #C0C0C0 !important;
+            }
+            #new_process_form div[data-baseweb="select"] > div > div:first-of-type {
+                padding: 0 0 0 14px !important;
+                display: flex !important;
+                align-items: center !important;
+                flex: 1 1 auto !important;
+                overflow: hidden !important;
+                min-width: 0 !important;
+            }
+            #new_process_form div[data-baseweb="select"] > div > div:last-of-type {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex: 0 0 auto !important;
+                width: 40px !important;
+                min-width: 40px !important;
+                max-width: 40px !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            #new_process_form div[data-baseweb="select"] button {
+                width: 32px !important;
+                height: 32px !important;
+                min-width: 32px !important;
+                max-width: 32px !important;
+                min-height: 32px !important;
+                max-height: 32px !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+                border: none !important;
+                background: transparent !important;
+                border-radius: 6px !important;
+                cursor: pointer !important;
+            }
+            #new_process_form div[data-baseweb="select"] button:hover {
+                background: rgba(0,0,0,0.04) !important;
+            }
+            #new_process_form div[data-baseweb="select"] svg {
+                fill: #9E0520 !important;
+                color: #9E0520 !important;
+                width: 16px !important;
+                height: 16px !important;
+            }
+            #new_process_form div[data-baseweb="select"] span,
+            #new_process_form div[data-baseweb="select"] input {
+                font-size: 15px !important;
+                line-height: 20px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
             st.subheader("📝 Registrar e Atribuir Novo Processo")
             
             servidores_dict = {s['nome_completo']: s['id'] for s in equipe_atribuivel if s.get('ativo', True)}
@@ -164,3 +233,4 @@ def render_add_process_form(id_chefe_para_acoes, chefe_logado, equipe_atribuivel
                     
                     st.toast(f"✅ Processo {processo_numero} criado e atribuído com sucesso!", icon="✅")
                     st.rerun()
+
