@@ -401,14 +401,30 @@ def get_user_subordinates(user_id: int):
 
 def get_direct_servants(user_id: int):
     """Retorna servidores diretos do usuário."""
-    relations = QueryBuilder("gabinete_servidores") \
-        .eq("chefe_id", user_id) \
-        .select("servidor_id") \
-        .execute()
-    if not relations: return []
-    ids = [r['servidor_id'] for r in relations]
-    if not ids: return []
-    return QueryBuilder("usuarios").in_list("id", ids).execute()
+    try:
+        relations = QueryBuilder("gabinete_servidores") \
+            .eq("chefe_id", user_id) \
+            .select("servidor_id") \
+            .execute()
+    except Exception as e:
+        print(f"[DB_COMPAT] ERRO ao buscar vinculos em gabinete_servidores para chefe_id={user_id}: {e}")
+        return []
+    
+    if not relations:
+        print(f"[DB_COMPAT] AVISO: Nenhum vinculo encontrado em gabinete_servidores para chefe_id={user_id}")
+        return []
+    
+    ids = [r.get('servidor_id') for r in relations if r.get('servidor_id') is not None]
+    if not ids:
+        print(f"[DB_COMPAT] AVISO: Relacoes encontradas mas sem servidor_id valido para chefe_id={user_id}")
+        return []
+    
+    try:
+        servidores = QueryBuilder("usuarios").in_list("id", ids).execute()
+        return servidores
+    except Exception as e:
+        print(f"[DB_COMPAT] ERRO ao buscar usuarios para ids={ids}: {e}")
+        return []
 
 
 
