@@ -314,12 +314,17 @@ a[download]:focus-visible {
   font-size: 14px;
 }
 
-/* Selectbox (BaseWeb) */
+/* Selectbox (BaseWeb) - Container principal */
 div[data-baseweb="select"] > div {
   background-color: white !important;
-  border: 1.5px solid var(--border) !important;
+  border: 2px solid var(--border) !important;
   border-radius: var(--radius-sm) !important;
   transition: all 0.2s ease !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
 }
 
 div[data-baseweb="select"] > div:focus-within {
@@ -327,29 +332,66 @@ div[data-baseweb="select"] > div:focus-within {
   box-shadow: var(--focus) !important;
 }
 
-/* Ícones e botões internos do selectbox (seta/dropdown) */
+div[data-baseweb="select"] > div:hover {
+  border-color: #C0C0C0 !important;
+}
+
+/* Texto interno do select - alinhamento e fonte */
+div[data-baseweb="select"] [data-testid="stMarkdown"] p,
+div[data-baseweb="select"] span[class*="ValueContainer"],
+div[data-baseweb="select"] div[class*="singleValue"],
+div[data-baseweb="select"] div[class*="placeholder"] {
+  font-size: 15px !important;
+  line-height: 1 !important;
+}
+
+/* Input interno (busca) */
+div[data-baseweb="select"] input {
+  font-size: 15px !important;
+  padding: 0 12px !important;
+  line-height: 44px !important;
+}
+
+/* Container do valor selecionado */
+div[data-baseweb="select"] > div > div:first-child {
+  padding-left: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+}
+
+/* Botao da seta/dropdown - quadrado limpo */
 div[data-baseweb="select"] button,
 div[data-baseweb="select"] [role="button"] {
-  width: 36px !important;
-  height: 36px !important;
-  min-width: 36px !important;
-  max-width: 36px !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
   padding: 0 !important;
-  margin: 0 !important;
+  margin: 3px 3px 3px 0 !important;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 4px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
 }
 
+div[data-baseweb="select"] button:hover,
+div[data-baseweb="select"] [role="button"]:hover {
+  background: #F0F0F0 !important;
+}
+
+/* Icone da seta */
 div[data-baseweb="select"] svg {
   fill: var(--brand-red) !important;
   color: var(--brand-red) !important;
-  width: 18px !important;
-  height: 18px !important;
+  width: 16px !important;
+  height: 16px !important;
 }
 
 /* Baseweb inputs */
