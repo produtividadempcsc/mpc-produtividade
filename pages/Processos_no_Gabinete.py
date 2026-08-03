@@ -132,6 +132,10 @@ else:
             equipe_atribuivel = list({u['id']: u for u in equipe_atribuivel}.values())
             # Sort by name
             equipe_atribuivel.sort(key=lambda x: x.get('nome_completo', ''))
+            
+            # Diagnostico silencioso: avisar se nenhum servidor vinculado (alem do proprio chefe)
+            if len(servidores_diretos) == 0 and len(chefes_subordinados) == 0:
+                print(f"[PROCESSOS_GABINETE] AVISO: Nenhum servidor direto ou chefe subordinado encontrado para chefe_id={id_chefe_para_acoes}. Verifique vinculos em gabinete_servidores.")
 
         # Renderiza Formulário de Novo Processo (Extraído para component)
         process_forms.render_add_process_form(
