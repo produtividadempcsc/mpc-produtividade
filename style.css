@@ -314,11 +314,42 @@ a[download]:focus-visible {
   font-size: 14px;
 }
 
-/* Selectbox */
-.stSelectbox > div > div > div {
+/* Selectbox (BaseWeb) */
+div[data-baseweb="select"] > div {
   background-color: white !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  transition: all 0.2s ease !important;
+}
+
+div[data-baseweb="select"] > div:focus-within {
+  border-color: var(--brand-red) !important;
+  box-shadow: var(--focus) !important;
+}
+
+/* Ícones e botões internos do selectbox (seta/dropdown) */
+div[data-baseweb="select"] button,
+div[data-baseweb="select"] [role="button"] {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 4px !important;
+}
+
+div[data-baseweb="select"] svg {
+  fill: var(--brand-red) !important;
+  color: var(--brand-red) !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 /* Baseweb inputs */
