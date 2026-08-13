@@ -104,7 +104,6 @@ def render_procurador_process_list(processos_com_procurador, usuarios_cache, pro
                         "status_servidor": "Finalizado",
                         "data_finalizacao": now_brazil().isoformat()
                     })
-                    import ui_utils
                     ui_utils.set_success_feedback(f"Processo {p.get('processo_numero')} finalizado!", "success")
                     st.rerun()
             
@@ -130,7 +129,6 @@ def render_procurador_process_list(processos_com_procurador, usuarios_cache, pro
                         user_id=st.session_state.active_user_id,
                         details="O processo foi devolvido pelo Procurador para análise do Chefe de Gabinete."
                     )
-                    import ui_utils
                     ui_utils.set_success_feedback(f"Devolvido para revisão!", "warning", "↩️")
                     st.rerun()
             
