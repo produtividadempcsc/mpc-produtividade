@@ -1,0 +1,740 @@
+import streamlit as st
+from datetime import date
+from supabase_client import supabase, QueryBuilder, select_all, select_by_id, select_where, select_first, insert, update_by_id, delete_by_id
+from utils.timezone import now_brazil, today_brazil
+
+# ============================================================================
+# Funções de Usuário
+# ============================================================================
+
+def get_user_by_id(user_id: int):
+    """Busca usuário por ID."""
+    return select_by_id("usuarios", user_id)
+
+
+def get_user_by_login(login: str):
+    """Busca usuário por login."""
+    return select_first("usuarios", "login", login)
+
+
+def get_all_users():
+    """Retorna todos os usuários."""
+    return select_all("usuarios")
+
+
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_all_users_cached():
+    """Retorna todos os usuários (com cache)."""
+    return select_all("usuarios")
+
+
+@st.cache_data(ttl=600)  # Cache por 10 minutos
+def get_all_product_types_cached():
+    """Retorna todos os tipos de produto (com cache)."""
+    return select_all("tipos_produto")
+
+
+def get_active_users():
+    """Retorna apenas usuários ativos."""
+    return QueryBuilder("usuarios").eq("ativo", True).order("nome_completo").execute()
+
+
+def toggle_user_active_status(user_id: int, active: bool):
+    """Ativa ou desativa um usuário."""
+    return update_by_id("usuarios", user_id, {"ativo": active})
+
+
+def update_user(user_id: int, data: dict):
+    """Atualiza dados de um usuário. Registra mudança de perfil no histórico."""
+    # Detectar mudança de perfil para registrar no histórico
+    if 'perfil' in data:
+        current_user = select_by_id("usuarios", user_id)
+        if current_user and current_user.get('perfil') != data['perfil']:
+            _record_profile_change(user_id, current_user['perfil'], data['perfil'])
+    return update_by_id("usuarios", user_id, data)
+
+
+# ============================================================================
+# Funções de Processo
+# ============================================================================
+
+def get_process_by_id(process_id: int):
+    """Busca processo por ID."""
+    return select_by_id("processos", process_id)
+
+
+def get_processes_by_user(user_id: int, role_column: str = "id_servidor_responsavel"):
+    """Busca processos de um usuário por papel."""
+    return select_where("processos", role_column, user_id)
+
+
+def update_process(process_id: int, data: dict):
+    """Atualiza dados de um processo."""
+    return update_by_id("processos", process_id, data)
+
+
+# ============================================================================
+# Funções de Tipo de Produto
+# ============================================================================
+
+def get_product_type_by_id(product_id: int):
+    """Busca tipo de produto por ID."""
+    return select_by_id("tipos_produto", product_id)
+
+
+def get_product_type_by_name(name: str):
+    """Busca tipo de produto por nome."""
+    return select_first("tipos_produto", "nome_produto", name)
+
+
+def get_correct_product_type_version(original_product_id: int, reference_date: date):
+    """
+    Busca a versão correta do TipoProduto com base em uma data de referência.
+    Fix #16: Busca versão cuja faixa de vigência (data_criacao...data_validade) contém a data de referência.
+    """
+    if not original_product_id or not reference_date:
+        return None
+    
+    # Buscar produto original
+    produto_original = get_product_type_by_id(original_product_id)
+    if not produto_original:
+        return None
+    
+    nome_produto = produto_original.get('nome_produto')
+    ref_date_str = reference_date.isoformat() if isinstance(reference_date, date) else reference_date
+    
+    # Buscar versão correta: a data de referência deve estar entre data_criacao e data_validade
+    produtos = QueryBuilder("tipos_produto") \
+        .eq("nome_produto", nome_produto) \
+        .lte("data_criacao", ref_date_str) \
+        .gte("data_validade", ref_date_str) \
+        .order("versao", desc=True) \
+        .limit(1) \
+        .execute()
+    
+    if produtos:
+        return produtos[0]
+    
+    # Fallback: retornar a versão mais recente (para datas futuras ou dados históricos)
+    produtos = QueryBuilder("tipos_produto") \
+        .eq("nome_produto", nome_produto) \
+        .order("versao", desc=True) \
+        .limit(1) \
+        .execute()
+    
+    return produtos[0] if produtos else None
+
+
+# ============================================================================
+# Funções de Notificação
+# ============================================================================
+
+def create_notification(user_id: int, message: str, tipo: str = "sistema", id_processo: int = None):
+    """Cria uma notificação no sistema para um usuário específico.
+    
+    Args:
+        user_id: ID do usuário destinatário
+        message: Mensagem da notificação
+        tipo: Tipo da notificação ('sistema', 'prazo', 'devolucao', 'conclusao', 'comentario', 'atribuicao')
+        id_processo: ID do processo relacionado (para link direto)
+    """
+    try:
+        data = {
+            "id_usuario_destino": user_id,
+            "mensagem": message,
+            "lida": False,
+            "timestamp": now_brazil().isoformat(),
+            "tipo": tipo,
+        }
+        if id_processo is not None:
+            data["id_processo"] = id_processo
+        result = insert("notificacoes", data)
+        print(f"Notificação criada para o usuário {user_id}: {message}")
+        return result
+    except Exception as e:
+        print(f"ERRO ao criar notificação para o usuário {user_id}: {e}")
+        return None
+
+
+def get_user_notifications(user_id: int, limit: int = 10):
+    """Retorna as notificações de um usuário."""
+    return QueryBuilder("notificacoes") \
+        .eq("id_usuario_destino", user_id) \
+        .order("timestamp", desc=True) \
+        .limit(limit) \
+        .execute()
+
+
+def mark_notifications_as_read(user_id: int):
+    """Marca todas as notificações não lidas de um usuário como lidas.
+    Fix #14: Usa update em batch via Supabase em vez de N queries individuais.
+    """
+    try:
+        supabase.table("notificacoes") \
+            .update({"lida": True}) \
+            .eq("id_usuario_destino", user_id) \
+            .eq("lida", False) \
+            .execute()
+    except Exception as e:
+        print(f"Erro ao marcar notificações como lidas: {e}")
+
+
+# ============================================================================
+# Funções de Histórico de Vínculos
+# ============================================================================
+
+def _record_profile_change(user_id: int, old_profile: str, new_profile: str):
+    """Registra mudança de perfil no histórico."""
+    hoje = today_brazil().isoformat()
+    try:
+        # Fechar registro anterior (setar data_fim)
+        active_records = QueryBuilder("historico_perfil") \
+            .eq("id_usuario", user_id) \
+            .is_null("data_fim") \
+            .execute()
+        for rec in active_records:
+            update_by_id("historico_perfil", rec['id'], {"data_fim": hoje})
+        
+        # Criar novo registro
+        insert("historico_perfil", {
+            "id_usuario": user_id,
+            "perfil": new_profile,
+            "data_inicio": hoje
+        })
+        print(f"[HISTÓRICO] Perfil do usuário {user_id} alterado: {old_profile} → {new_profile}")
+    except Exception as e:
+        print(f"[HISTÓRICO] Erro ao registrar mudança de perfil: {e}")
+
+
+def _record_initial_profile(user_id: int, perfil: str):
+    """Registra o perfil inicial de um usuário recém-criado."""
+    try:
+        insert("historico_perfil", {
+            "id_usuario": user_id,
+            "perfil": perfil,
+            "data_inicio": today_brazil().isoformat()
+        })
+    except Exception as e:
+        print(f"[HISTÓRICO] Erro ao registrar perfil inicial: {e}")
+
+
+def _record_link_changes(user_id: int, tipo_vinculo: str, old_ids: list, new_ids: list):
+    """Registra adições e remoções de vínculos no histórico."""
+    hoje = today_brazil().isoformat()
+    old_set = set(old_ids)
+    new_set = set(new_ids)
+    
+    removed = old_set - new_set
+    added = new_set - old_set
+    
+    try:
+        # Fechar vínculos removidos
+        for vid in removed:
+            active = QueryBuilder("historico_vinculos") \
+                .eq("id_usuario", user_id) \
+                .eq("id_vinculado", vid) \
+                .eq("tipo_vinculo", tipo_vinculo) \
+                .is_null("data_fim") \
+                .execute()
+            for rec in active:
+                update_by_id("historico_vinculos", rec['id'], {"data_fim": hoje})
+        
+        # Criar registros para vínculos adicionados
+        for vid in added:
+            insert("historico_vinculos", {
+                "id_usuario": user_id,
+                "id_vinculado": vid,
+                "tipo_vinculo": tipo_vinculo,
+                "data_inicio": hoje
+            })
+        
+        if removed or added:
+            print(f"[HISTÓRICO] Vínculos '{tipo_vinculo}' do usuário {user_id}: +{len(added)} -{len(removed)}")
+    except Exception as e:
+        print(f"[HISTÓRICO] Erro ao registrar mudança de vínculos: {e}")
+
+
+# ============================================================================
+# Funções de Histórico de Processo
+# ============================================================================
+
+def get_process_history(process_id: int):
+    """Retorna o histórico de um processo."""
+    return QueryBuilder("processo_historico") \
+        .eq("id_processo", process_id) \
+        .order("timestamp", desc=True) \
+        .execute()
+
+
+def add_process_history(process_id: int, action: str, user_id: int, details: str = None):
+    """Adiciona uma entrada no histórico de um processo."""
+    data = {
+        "id_processo": process_id,
+        "id_usuario_acao": user_id,
+        "evento": action,
+        "observacao": details,
+        "timestamp": now_brazil().isoformat()
+    }
+    return insert("processo_historico", data)
+
+
+# ============================================================================
+# Funções de Substituição
+# ============================================================================
+
+def get_active_substitution(user_id: int):
+    """Verifica se o usuário tem uma substituição ativa."""
+    hoje = today_brazil().isoformat()
+    
+    result = QueryBuilder("substituicoes") \
+        .eq("id_servidor_substituto", user_id) \
+        .lte("data_inicio", hoje) \
+        .gte("data_fim", hoje) \
+        .execute()
+    
+    return result[0] if result else None
+
+
+# ============================================================================
+# Funções de Comentário
+# ============================================================================
+
+def get_process_comments(process_id: int):
+    """Retorna os comentários de um processo."""
+    return QueryBuilder("comentarios") \
+        .eq("id_processo", process_id) \
+        .order("timestamp", desc=True) \
+        .execute()
+
+
+def add_comment(process_id: int, user_id: int, text: str):
+    """Adiciona um comentário a um processo."""
+    data = {
+        "id_processo": process_id,
+        "id_usuario": user_id,
+        "texto": text,
+        "timestamp": now_brazil().isoformat()
+    }
+    return insert("comentarios", data)
+
+
+# ============================================================================
+# Funções de Cálculo de Prazo
+# ============================================================================
+
+
+
+
+# ============================================================================
+# Funções de Hierarquia e Relacionamentos
+# ============================================================================
+
+def get_user_bosses(servidor_id: int):
+    """Retorna a lista de usuários que são chefes do servidor fornecido."""
+    # Passo 1: Buscar IDs dos chefes na tabela de associação
+    relations = QueryBuilder("gabinete_servidores") \
+        .eq("servidor_id", servidor_id) \
+        .select("chefe_id") \
+        .execute()
+    
+    if not relations:
+        return []
+    
+    chefe_ids = [r['chefe_id'] for r in relations]
+    
+    # Passo 2: Buscar os usuários chefes
+    if not chefe_ids:
+        return []
+        
+    chefes = QueryBuilder("usuarios") \
+        .in_list("id", chefe_ids) \
+        .execute()
+        
+    return chefes
+
+
+def get_prosecutors_linked_to_users(user_ids: list):
+    """Retorna lista de procuradores vinculados a uma lista de usuários (geralmente chefes)."""
+    if not user_ids:
+        return []
+        
+    # Passo 1: Buscar IDs dos procuradores na tabela de associação
+    relations = QueryBuilder("procurador_chefes") \
+        .in_list("chefe_id", user_ids) \
+        .select("procurador_id") \
+        .execute()
+        
+    if not relations:
+        return []
+        
+    proc_ids = list(set([r['procurador_id'] for r in relations]))
+    
+    # Passo 2: Buscar os usuários procuradores
+    procuradores = QueryBuilder("usuarios") \
+        .in_list("id", proc_ids) \
+        .execute()
+        
+    return procuradores
+
+
+def get_prosecutors_of_boss(chefe_id: int):
+    """Retorna procuradores de um chefe específico."""
+    return get_prosecutors_linked_to_users([chefe_id])
+
+
+def get_product_types():
+    """Retorna todos os tipos de produto."""
+    return select_all("tipos_produto")
+
+
+def get_user_subordinates(user_id: int):
+    """Retorna chefes subordinados ao usuário."""
+    relations = QueryBuilder("chefe_subordinado_chefe") \
+        .eq("chefe_superior_id", user_id) \
+        .select("chefe_subordinado_id") \
+        .execute()
+    if not relations: return []
+    ids = [r['chefe_subordinado_id'] for r in relations]
+    if not ids: return []
+    return QueryBuilder("usuarios").in_list("id", ids).execute()
+
+
+def get_direct_servants(user_id: int):
+    """Retorna servidores diretos do usuário."""
+    try:
+        relations = QueryBuilder("gabinete_servidores") \
+            .eq("chefe_id", user_id) \
+            .select("servidor_id") \
+            .execute()
+    except Exception as e:
+        print(f"[DB_COMPAT] ERRO ao buscar vinculos em gabinete_servidores para chefe_id={user_id}: {e}")
+        return []
+    
+    if not relations:
+        print(f"[DB_COMPAT] AVISO: Nenhum vinculo encontrado em gabinete_servidores para chefe_id={user_id}")
+        return []
+    
+    ids = [r.get('servidor_id') for r in relations if r.get('servidor_id') is not None]
+    if not ids:
+        print(f"[DB_COMPAT] AVISO: Relacoes encontradas mas sem servidor_id valido para chefe_id={user_id}")
+        return []
+    
+    try:
+        servidores = QueryBuilder("usuarios").in_list("id", ids).execute()
+        return servidores
+    except Exception as e:
+        print(f"[DB_COMPAT] ERRO ao buscar usuarios para ids={ids}: {e}")
+        return []
+
+
+
+def mark_comments_as_read(user_id: int, comment_ids: list):
+    """Marca lista de comentários como lidos pelo usuário."""
+    if not comment_ids: return
+    
+    # Check which are already read to avoid duplicates
+    existing = QueryBuilder("comentario_lido") \
+        .eq("id_usuario", user_id) \
+        .in_list("id_comentario", comment_ids) \
+        .execute()
+    
+    existing_ids = {r['id_comentario'] for r in existing}
+    to_insert = [cid for cid in comment_ids if cid not in existing_ids]
+    
+    for cid in to_insert:
+        insert("comentario_lido", {"id_usuario": user_id, "id_comentario": cid})
+
+
+
+
+
+
+# ============================================================================
+# Funções de Gerenciamento de Usuários (Admin)
+# ============================================================================
+
+def create_user(data: dict):
+    """Cria um novo usuário e registra perfil inicial no histórico."""
+    result = insert("usuarios", data)
+    if result and isinstance(result, dict) and 'id' in result:
+        _record_initial_profile(result['id'], data.get('perfil', 'Servidor'))
+    return result
+
+def delete_user(user_id: int):
+    """
+    Deleta um usuário e todos os seus dados relacionados.
+    Remove primeiro os relacionamentos para evitar erros de foreign key.
+    """
+    try:
+        # 1. Remover relacionamentos de gabinete (servidor-chefe)
+        QueryBuilder("gabinete_servidores").eq("servidor_id", user_id).delete()
+        QueryBuilder("gabinete_servidores").eq("chefe_id", user_id).delete()
+        
+        # 2. Remover relacionamentos de procurador-chefe
+        QueryBuilder("procurador_chefes").eq("chefe_id", user_id).delete()
+        QueryBuilder("procurador_chefes").eq("procurador_id", user_id).delete()
+        
+        # 3. Remover relacionamentos de subordinação entre chefes
+        QueryBuilder("chefe_subordinado_chefe").eq("chefe_subordinado_id", user_id).delete()
+        QueryBuilder("chefe_subordinado_chefe").eq("chefe_superior_id", user_id).delete()
+        
+        # 4. Remover substituições
+        QueryBuilder("substituicoes").eq("id_chefe_titular", user_id).delete()
+        QueryBuilder("substituicoes").eq("id_servidor_substituto", user_id).delete()
+        
+        # 5. Remover afastamentos
+        QueryBuilder("afastamentos").eq("id_usuario", user_id).delete()
+        
+        # 6. Remover notificações
+        QueryBuilder("notificacoes").eq("id_usuario_destino", user_id).delete()
+        
+        # 7. Remover comentários do usuário
+        QueryBuilder("comentarios").eq("id_usuario", user_id).delete()
+        
+        # 8. Remover marcações de comentários lidos
+        QueryBuilder("comentario_lido").eq("id_usuario", user_id).delete()
+        
+        # 9. Remover histórico de processos (ações do usuário)
+        QueryBuilder("processo_historico").eq("id_usuario_acao", user_id).delete()
+        
+        # 10. Remover histórico de perfil
+        QueryBuilder("historico_perfil").eq("id_usuario", user_id).delete()
+        
+        # 11. Remover histórico de vínculos
+        QueryBuilder("historico_vinculos").eq("id_usuario", user_id).delete()
+        
+        # 12. Remover histórico de servidor em processos
+        QueryBuilder("processo_servidor_historico").eq("id_servidor", user_id).delete()
+        
+        # 13. Finalmente, deletar o usuário
+        return delete_by_id("usuarios", user_id)
+    except Exception as e:
+        print(f"[DB_COMPAT] Erro ao deletar usuário {user_id}: {e}")
+        return False
+
+def manage_user_relations(user_id: int, relation_table: str, id_col_main: str, id_col_rel: str, related_ids: list):
+    """
+    Gerencia relacionamentos many-to-many (limpa e insere novos).
+    Registra mudanças no histórico de vínculos.
+    Ex: user_id=10, relation_table='gabinete_servidores', id_col_main='servidor_id', id_col_rel='chefe_id', related_ids=[1, 2]
+    """
+    # Mapear tabela para tipo de vínculo
+    TIPO_VINCULO_MAP = {
+        "gabinete_servidores": "servidor_chefe",
+        "procurador_chefes": "chefe_procurador",
+        "chefe_subordinado_chefe": "chefe_superior"
+    }
+    
+    # Buscar IDs atuais antes de alterar
+    current = QueryBuilder(relation_table).eq(id_col_main, user_id).execute()
+    old_ids = [r[id_col_rel] for r in current]
+    
+    # 1. Remove existing
+    QueryBuilder(relation_table).eq(id_col_main, user_id).delete()
+    
+    # 2. Insert new (Fix #4: inserir um a um, pois insert() espera dict)
+    if related_ids:
+        for rid in related_ids:
+            insert(relation_table, {id_col_main: user_id, id_col_rel: rid})
+    
+    # 3. Registrar mudanças no histórico
+    tipo_vinculo = TIPO_VINCULO_MAP.get(relation_table)
+    if tipo_vinculo:
+        _record_link_changes(user_id, tipo_vinculo, old_ids, related_ids)
+
+# Wrappers for specific relations
+def update_servidor_chefes(servidor_id: int, chefe_ids: list):
+    manage_user_relations(servidor_id, "gabinete_servidores", "servidor_id", "chefe_id", chefe_ids)
+
+def update_chefe_procuradores(chefe_id: int, procurador_ids: list):
+    manage_user_relations(chefe_id, "procurador_chefes", "chefe_id", "procurador_id", procurador_ids)
+
+def update_chefe_superiores(chefe_id: int, superior_ids: list):
+    manage_user_relations(chefe_id, "chefe_subordinado_chefe", "chefe_subordinado_id", "chefe_superior_id", superior_ids)
+
+
+# ============================================================================
+# Funções de Substituição
+# ============================================================================
+
+def get_all_substituicoes():
+    """Retorna todas as substituições."""
+    return QueryBuilder("substituicoes").order("data_inicio", desc=True).execute()
+
+def get_substituicoes_by_chefe(chefe_id: int):
+    """Retorna substituições de um chefe específico."""
+    return QueryBuilder("substituicoes").eq("id_chefe_titular", chefe_id).order("data_inicio", desc=True).execute()
+
+def create_substituicao(data: dict):
+    """Cria uma nova substituição."""
+    return insert("substituicoes", data)
+
+def delete_substituicao(sub_id: int):
+    """Remove uma substituição."""
+    return delete_by_id("substituicoes", sub_id)
+
+
+# ============================================================================
+# Funções de Configuração (configuracoes table)
+# ============================================================================
+
+def get_config(key: str) -> str:
+    """Busca valor de configuração por chave."""
+    result = select_first("configuracoes", "chave", key)
+    return result.get('valor') if result else None
+
+def set_config(key: str, value: str):
+    """Define ou atualiza uma configuração."""
+    existing = select_first("configuracoes", "chave", key)
+    if existing:
+        # Update existing - configuracoes uses 'chave' as primary key, not 'id'
+        supabase.table("configuracoes").update({"valor": value}).eq("chave", key).execute()
+    else:
+        insert("configuracoes", {"chave": key, "valor": value})
+
+def get_all_configs() -> list:
+    """Retorna todas as configurações."""
+    return select_all("configuracoes")
+
+
+# ============================================================================
+# Funções de Prompt IA (prompts_ia table)
+# ============================================================================
+
+def get_all_prompts(user_id: int = None, include_public: bool = True) -> list:
+    """Retorna prompts IA, opcionalmente filtrados por usuário."""
+    if user_id is None:
+        # Return all public prompts
+        return QueryBuilder("prompts_ia").eq("e_publico", True).order("data_criacao", desc=True).execute()
+    
+    if include_public:
+        # Return user's prompts + public prompts
+        # Supabase doesn't support OR directly in simple queries, so we fetch separately and merge
+        user_prompts = QueryBuilder("prompts_ia").eq("id_criador", user_id).execute()
+        public_prompts = QueryBuilder("prompts_ia").eq("e_publico", True).execute()
+        
+        # Merge and deduplicate (by id)
+        all_prompts = {p['id']: p for p in user_prompts}
+        for p in public_prompts:
+            if p['id'] not in all_prompts:
+                all_prompts[p['id']] = p
+        return sorted(all_prompts.values(), key=lambda x: x.get('data_criacao', ''), reverse=True)
+    else:
+        # Return only user's prompts
+        return QueryBuilder("prompts_ia").eq("id_criador", user_id).order("data_criacao", desc=True).execute()
+
+def get_prompt_by_id(prompt_id: int) -> dict:
+    """Busca prompt por ID."""
+    return select_by_id("prompts_ia", prompt_id)
+
+def create_prompt(data: dict) -> dict:
+    """Cria um novo prompt IA."""
+    if 'data_criacao' not in data:
+        data['data_criacao'] = now_brazil().isoformat()
+    return insert("prompts_ia", data)
+
+def update_prompt(prompt_id: int, data: dict):
+    """Atualiza um prompt IA."""
+    return update_by_id("prompts_ia", prompt_id, data)
+
+def delete_prompt(prompt_id: int):
+    """Remove um prompt IA."""
+    return delete_by_id("prompts_ia", prompt_id)
+
+
+# ============================================================================
+# Funções de Tipo de Produto - CRUD Completo (tipos_produto table)
+# ============================================================================
+
+def get_all_product_types() -> list:
+    """Retorna todos os tipos de produto ordenados."""
+    return QueryBuilder("tipos_produto").order("nome_produto").order("versao", desc=True).execute()
+
+def create_product_type(data: dict) -> dict:
+    """Cria um novo tipo de produto."""
+    if 'data_criacao' not in data:
+        data['data_criacao'] = now_brazil().isoformat()
+    if 'versao' not in data:
+        data['versao'] = 1
+    return insert("tipos_produto", data)
+
+def update_product_type(product_id: int, data: dict):
+    """Atualiza um tipo de produto."""
+    return update_by_id("tipos_produto", product_id, data)
+
+def delete_product_type(product_id: int):
+    """Remove um tipo de produto."""
+    return delete_by_id("tipos_produto", product_id)
+
+def get_latest_product_versions() -> list:
+    """Retorna a versão mais recente de cada tipo de produto."""
+    all_products = get_all_product_types()
+    # Group by nome_id and get the latest version
+    latest = {}
+    for p in all_products:
+        nome_id = p.get('nome_id')
+        if nome_id not in latest or p.get('versao', 0) > latest[nome_id].get('versao', 0):
+            latest[nome_id] = p
+    return list(latest.values())
+
+
+
+# ============================================================================
+# Funções de Histórico de Processo (CRUD)
+# ============================================================================
+
+def delete_process_history_by_user(user_id: int):
+    """Remove histórico de um usuário específico."""
+    QueryBuilder("processo_historico").eq("id_usuario_acao", user_id).delete()
+
+
+# ============================================================================
+# Funções de Histórico de Servidor Vinculado ao Processo
+# ============================================================================
+
+def registrar_vinculo_servidor(id_processo: int, id_servidor: int, data_inicio):
+    """Registra um novo vínculo servidor↔processo na tabela de histórico."""
+    data_inicio_str = data_inicio.isoformat() if hasattr(data_inicio, 'isoformat') else data_inicio
+    try:
+        return insert("processo_servidor_historico", {
+            "id_processo": id_processo,
+            "id_servidor": id_servidor,
+            "data_inicio": data_inicio_str
+        })
+    except Exception as e:
+        print(f"[HISTÓRICO SERVIDOR] Erro ao registrar vínculo: {e}")
+        return None
+
+
+def fechar_vinculo_servidor(id_processo: int, data_fim):
+    """Fecha o vínculo ativo (data_fim=NULL) do processo, setando data_fim."""
+    data_fim_str = data_fim.isoformat() if hasattr(data_fim, 'isoformat') else data_fim
+    try:
+        ativos = QueryBuilder("processo_servidor_historico") \
+            .eq("id_processo", id_processo) \
+            .is_null("data_fim") \
+            .execute()
+        for rec in ativos:
+            update_by_id("processo_servidor_historico", rec['id'], {"data_fim": data_fim_str})
+        return True
+    except Exception as e:
+        print(f"[HISTÓRICO SERVIDOR] Erro ao fechar vínculo: {e}")
+        return False
+
+
+def get_historico_servidores(id_processo: int):
+    """Retorna o histórico de servidores vinculados ao processo, ordenado por data_inicio."""
+    return QueryBuilder("processo_servidor_historico") \
+        .eq("id_processo", id_processo) \
+        .order("data_inicio") \
+        .execute()
+
+
+# ============================================================================
+# Funções Auxiliares para hash de senha (compatibilidade)
+# ============================================================================
+
+def hash_password(password: str) -> str:
+    """Gera hash bcrypt de uma senha."""
+    import bcrypt
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
