@@ -41,7 +41,7 @@ def build_sidebar():
     
     logo = load_logo()
     if logo:
-        st.sidebar.image(logo, width='stretch')
+        st.sidebar.image(logo, use_container_width=True)
     st.sidebar.title(f"Bem-vindo(a),")
     st.sidebar.header(st.session_state.get("user_nome", "")) 
     st.sidebar.markdown(f"Perfil Ativo: **{st.session_state.get('active_perfil', '')}**")
@@ -85,7 +85,7 @@ def build_sidebar():
                 "sistema": "Sistema",
             }
             
-            with st.sidebar.popover(bell_label, width='stretch'):
+            with st.sidebar.popover(bell_label, use_container_width=True):
                 st.markdown("#### 🔔 Central de Notificações")
                 
                 # Buscar últimas 20 notificações
@@ -124,7 +124,7 @@ def build_sidebar():
                     
                     # Botão para marcar todas como lidas
                     if unread_count > 0:
-                        if st.button("✅ Marcar todas como lidas", key="btn_mark_all_read", width='stretch'):
+                        if st.button("✅ Marcar todas como lidas", key="btn_mark_all_read", use_container_width=True):
                             from db_compat import mark_notifications_as_read
                             mark_notifications_as_read(st.session_state.active_user_id)
                             st.rerun()
@@ -139,13 +139,13 @@ def build_sidebar():
     for page_label in allowed_menus:
         is_active = (page_label == active_page)
         button_type = "primary" if is_active else "secondary"
-        if st.sidebar.button(page_label, width='stretch', type=button_type, key=f"btn_{page_label}"):
+        if st.sidebar.button(page_label, use_container_width=True, type=button_type, key=f"btn_{page_label}"):
             if not is_active:
                 st.switch_page(MENU_ITEMS[page_label])
     
     st.sidebar.markdown("---")
     
     # Botão de Logout
-    if st.sidebar.button('🔴 Sair do Sistema', width='stretch', key="btn_logout"):
+    if st.sidebar.button('🔴 Sair do Sistema', use_container_width=True, key="btn_logout"):
         auth.logout_user()
         st.rerun()
