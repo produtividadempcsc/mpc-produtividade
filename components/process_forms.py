@@ -5,6 +5,7 @@ from supabase_client import QueryBuilder, insert
 from db_compat import get_user_by_id
 from services.prazo_service import calculate_due_date
 import utils.notifications as notif_utils
+import ui_utils
 
 def render_add_process_form(id_chefe_para_acoes, chefe_logado, equipe_atribuivel, all_prods_cached, procuradores_dict):
     """Renderiza o formulário de cadastro e atribuição de um novo processo."""
@@ -231,6 +232,5 @@ def render_add_process_form(id_chefe_para_acoes, chefe_logado, equipe_atribuivel
                         """
                         notif_utils.send_email_notification(servidor.get('email'), assunto, corpo)
                     
-                    import ui_utils
                     ui_utils.set_success_feedback(f"Processo {processo_numero} criado e atribuído com sucesso!")
                     st.rerun()
