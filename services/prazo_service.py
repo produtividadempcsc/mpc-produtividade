@@ -267,3 +267,59 @@ def calculate_net_duration_calendar_batch(start_date: date, end_date: date,
 
     net_duration = total_calendar - leave_days - manual_suspension_days
     return max(0, net_duration)
+
+
+def count_leave_days_in_period(start_date: date, end_date: date, afastamentos_datas: set) -> int:
+    """
+    Conta os dias de afastamento do usuário no intervalo decorrido (start_date + 1 até end_date).
+    """
+    if not start_date or not end_date or start_date >= end_date:
+        return 0
+    leave_days = 0
+    d = start_date + timedelta(days=1)
+    while d <= end_date:
+        if d in afastamentos_datas:
+            leave_days += 1
+        d += timedelta(days=1)
+    return leave_days
+
+
+def calculate_elapsed_duration(start_date: date, end_date: date, tipo_contagem: str,
+                               afastamentos_datas: set = None, feriados: set = None,
+                               dias_suspensos: int = 0, id_usuario: int = None) -> int:
+    """
+    Calcula a quantidade de dias decorridos entre a data inicial e a data final,
+    excluindo o dia de início (Duração = Data Fim - Data Início), respeitando o tipo
+    de contagem cadastrado (dias úteis vs dias corridos).
+
+    - 'dias uteis':
+        Conta os dias úteis entre (start_date + 1) e end_date,
+        desconsiderando fins de semana, feriados e afastamentos do usuário,
+        e subtrai eventuais dias de suspensão.
+    - 'dias corridos' (ou qualquer outro):
+        Calcula (end_date - start_date).days e subtrai os dias de afastamento
+        do usuário ocorridos no período e eventuais dias de suspensão.
+    """
+    if not start_date or not end_date or start_date > end_date:
+        return 0
+    
+    if afastamentos_datas is None and id_usuario is not None:
+        afastamentos_datas = get_leave_dates_set(id_usuario)
+    elif afastamentos_datas is None:
+        afastamentos_datas = set()
+
+    if tipo_contagem == 'dias uteis':
+        if feriados is None:
+            feriados = get_all_holidays()
+        dias_uteis = 0
+        curr = start_date + timedelta(days=1)
+        while curr <= end_date:
+            if curr.weekday() < 5 and curr not in feriados and curr not in afastamentos_datas:
+                dias_uteis += 1
+            curr += timedelta(days=1)
+        return max(0, dias_uteis - dias_suspensos)
+    else:
+        total_calendar = (end_date - start_date).days
+        leave_days = count_leave_days_in_period(start_date, end_date, afastamentos_datas)
+        return max(0, total_calendar - leave_days - dias_suspensos)
+
