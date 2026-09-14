@@ -3,8 +3,15 @@ from datetime import datetime, date
 import os
 from supabase_client import QueryBuilder
 import db_compat
-from repositories.afastamento_repository import get_leave_days_for_period
-from services.prazo_service import calculate_due_date, calculate_net_work_days
+from repositories.afastamento_repository import get_leave_days_for_period, get_all_leave_dates_by_user
+from repositories.calendar_repository import get_all_holidays
+from services.prazo_service import (
+    calculate_due_date,
+    calculate_due_date_batch,
+    calculate_net_work_days,
+    calculate_elapsed_duration,
+    count_leave_days_in_period
+)
 # Debug flag - set to True to see processing details
 DEBUG_MODE = True
 
@@ -65,9 +72,11 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
     raw_processes = QueryBuilder("processos").eq("id_procurador", procurador_id).execute()
     _debug_log(f"Total de processos do procurador: {len(raw_processes)}")
     
-    # Pre-fetch product types for efficiency
+    # Pre-fetch product types, holidays and leaves for efficiency
     product_types = db_compat.get_all_product_types()
     prod_map = {p['id']: p for p in product_types}
+    feriados = get_all_holidays()
+    all_leaves = get_all_leave_dates_by_user()
     
     # 3. Filtrar e Processar Processos
     dados_processos = []
@@ -132,6 +141,8 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         
         servidor = servidores_map.get(p['id_servidor_responsavel']) or db_compat.get_user_by_id(p['id_servidor_responsavel']) # Fallback if not in current hierarchy but in history
         chefe = chefes_map.get(p['id_chefe_gabinete']) or db_compat.get_user_by_id(p['id_chefe_gabinete'])
+        leaves_servidor = all_leaves.get(p['id_servidor_responsavel'], set())
+        leaves_chefe = all_leaves.get(p['id_chefe_gabinete'], set())
         
         # --- Cálculos Servidor ---
         servidor_concluiu_prazo = "N/A"
@@ -143,23 +154,22 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         d_concl_serv = datetime.fromisoformat(p.get('data_conclusao_servidor')).date() if p.get('data_conclusao_servidor') else None
         
         if d_concl_serv:
-             # Calculate due date logic
-             # Note: calling calculate_due_date
-             # Args: start_date, prazo_dias, tipo_contagem, id_usuario, dias_suspensos, nao_se_aplica_prazo
-             
              prazo_servidor = p.get('prazo_servidor_aplicado')
              tipo_contagem = tipo_prod.get('tipo_contagem_prazo')
              dias_suspensos = p.get('prazo_total_dias_suspenso', 0)
              nao_aplica = p.get('nao_se_aplica_prazo_servidor', False)
              
-             data_vencimento_servidor = calculate_due_date(
+             data_vencimento_servidor = calculate_due_date_batch(
                  d_atrib_serv, prazo_servidor, tipo_contagem, 
-                 p['id_servidor_responsavel'], dias_suspensos, nao_aplica
+                 leaves_servidor, feriados, dias_suspensos, nao_aplica
              )
              
              servidor_concluiu_prazo = "Sim" if d_concl_serv <= data_vencimento_servidor else "Não"
-             tempo_conclusao_servidor = calculate_net_work_days(d_atrib_serv, d_concl_serv, p['id_servidor_responsavel'])
-             afastamento_servidor = get_leave_days_for_period(d_atrib_serv, d_concl_serv, p['id_servidor_responsavel'])
+             tempo_conclusao_servidor = calculate_elapsed_duration(
+                 d_atrib_serv, d_concl_serv, tipo_contagem,
+                 afastamentos_datas=leaves_servidor, feriados=feriados, dias_suspensos=dias_suspensos
+             )
+             afastamento_servidor = count_leave_days_in_period(d_atrib_serv, d_concl_serv, leaves_servidor)
 
         # --- Cálculos Chefe ---
         chefe_concluiu_prazo = "N/A"
@@ -179,14 +189,17 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             tipo_contagem = tipo_prod.get('tipo_contagem_prazo')
             dias_suspensos = p.get('prazo_total_dias_suspenso', 0)
             
-            data_vencimento_chefe = calculate_due_date(
+            data_vencimento_chefe = calculate_due_date_batch(
                 d_inicio_revisao, prazo_chefe, tipo_contagem,
-                p['id_chefe_gabinete'], dias_suspensos
+                leaves_chefe, feriados, dias_suspensos
             )
             
             chefe_concluiu_prazo = "Sim" if d_concl_chefe <= data_vencimento_chefe else "Não"
-            tempo_revisao_chefe = calculate_net_work_days(d_inicio_revisao, d_concl_chefe, p['id_chefe_gabinete'])
-            afastamento_chefe = get_leave_days_for_period(d_inicio_revisao, d_concl_chefe, p['id_chefe_gabinete'])
+            tempo_revisao_chefe = calculate_elapsed_duration(
+                d_inicio_revisao, d_concl_chefe, tipo_contagem,
+                afastamentos_datas=leaves_chefe, feriados=feriados, dias_suspensos=dias_suspensos
+            )
+            afastamento_chefe = count_leave_days_in_period(d_inicio_revisao, d_concl_chefe, leaves_chefe)
 
         dados_processos.append({
             'Nº do Processo': p.get('processo_numero'),
@@ -200,7 +213,7 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             'Chefe de Gabinete': chefe.get('nome_completo') if chefe else "Desconhecido",
             'Chefe de Gabinete ID': p['id_chefe_gabinete'],
             'Servidor ID': p['id_servidor_responsavel'],
-            'Data de Início da Revisão': d_concl_serv, # Same as serv conclusion
+            'Data de Início da Revisão': d_inicio_revisao,
             'Data de Revisão (Chefe de Gabinete)': d_concl_chefe,
             'Afastamento Chefe (dias)': afastamento_chefe,
             'Tempo de Revisão (Chefe)': tempo_revisao_chefe,
