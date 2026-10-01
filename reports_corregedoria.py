@@ -98,22 +98,23 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         # 4. Estavam ATIVOS durante o período (atribuído antes, ainda não concluído ou concluído depois)
         
         d_atrib = p.get('data_atribuicao_servidor')
-        d_concl_serv = p.get('data_conclusao_servidor')
-        d_concl_chefe = p.get('data_conclusao_chefe')
+        d_concl_serv_raw = p.get('data_conclusao_servidor')
+        d_concl_chefe_raw = p.get('data_conclusao_chefe')
+        d_entrada_mpc_raw = p.get('data_entrada_mpc')
         
         in_period = False
         
         # Caso 1-3: Alguma data está dentro do período
-        for d_str in [d_atrib, d_concl_serv, d_concl_chefe]:
-            if d_str and start_dt <= d_str <= end_dt:
+        for d_str in [d_atrib, d_concl_serv_raw, d_concl_chefe_raw, d_entrada_mpc_raw]:
+            if d_str and start_dt <= str(d_str)[:10] <= end_dt:
                 in_period = True
                 break
         
         # Caso 4: Processo estava "em andamento" durante o período
         # (atribuído ANTES ou no início do período E (não concluído OU concluído DEPOIS do período))
         if not in_period and d_atrib:
-            atribuido_antes_ou_no_inicio = d_atrib <= end_dt
-            ainda_ativo = d_concl_serv is None or d_concl_serv >= start_dt
+            atribuido_antes_ou_no_inicio = str(d_atrib)[:10] <= end_dt
+            ainda_ativo = d_concl_serv_raw is None or str(d_concl_serv_raw)[:10] >= start_dt
             if atribuido_antes_ou_no_inicio and ainda_ativo:
                 in_period = True
         
@@ -150,8 +151,11 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         afastamento_servidor = 0
         
         # Parsing dates
-        d_atrib_serv = datetime.fromisoformat(p.get('data_atribuicao_servidor')).date()
-        d_concl_serv = datetime.fromisoformat(p.get('data_conclusao_servidor')).date() if p.get('data_conclusao_servidor') else None
+        d_atrib_serv = datetime.fromisoformat(str(p.get('data_atribuicao_servidor'))[:10]).date()
+        d_concl_serv = datetime.fromisoformat(str(d_concl_serv_raw)[:10]).date() if d_concl_serv_raw else None
+        d_entrada_mpc = datetime.fromisoformat(str(d_entrada_mpc_raw)[:10]).date() if d_entrada_mpc_raw else None
+        d_finalizacao_raw = p.get('data_finalizacao')
+        d_finalizacao = datetime.fromisoformat(str(d_finalizacao_raw)[:10]).date() if d_finalizacao_raw else None
         
         if d_concl_serv:
              prazo_servidor = p.get('prazo_servidor_aplicado')
@@ -170,17 +174,22 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
                  afastamentos_datas=leaves_servidor, feriados=feriados, dias_suspensos=dias_suspensos
              )
              afastamento_servidor = count_leave_days_in_period(d_atrib_serv, d_concl_serv, leaves_servidor)
+        else:
+             if p.get('nao_se_aplica_prazo_servidor'):
+                 servidor_concluiu_prazo = "Não se Aplica"
+             else:
+                 servidor_concluiu_prazo = "Em Andamento"
 
         # --- Cálculos Chefe ---
         chefe_concluiu_prazo = "N/A"
         tempo_revisao_chefe = None
         afastamento_chefe = 0
         
-        d_concl_chefe = datetime.fromisoformat(p.get('data_conclusao_chefe')).date() if p.get('data_conclusao_chefe') else None
+        d_concl_chefe = datetime.fromisoformat(str(d_concl_chefe_raw)[:10]).date() if d_concl_chefe_raw else None
         
         d_atrib_chefe_str = p.get('data_atribuicao_chefe')
         # d_inicio_revisao assumes data_atribuicao_chefe if exists, else data_conclusao_servidor
-        d_inicio_revisao = datetime.fromisoformat(d_atrib_chefe_str).date() if d_atrib_chefe_str else d_concl_serv
+        d_inicio_revisao = datetime.fromisoformat(str(d_atrib_chefe_str)[:10]).date() if d_atrib_chefe_str else d_concl_serv
         
         if p.get('ignorar_revisao_chefe'):
             chefe_concluiu_prazo = "Não se Aplica"
@@ -200,10 +209,27 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
                 afastamentos_datas=leaves_chefe, feriados=feriados, dias_suspensos=dias_suspensos
             )
             afastamento_chefe = count_leave_days_in_period(d_inicio_revisao, d_concl_chefe, leaves_chefe)
+        elif d_inicio_revisao and not d_concl_chefe:
+            chefe_concluiu_prazo = "Em Andamento"
+        else:
+            chefe_concluiu_prazo = "Aguardando Servidor"
+
+        # Situação atual do processo
+        if p.get('prazo_status') == 'Suspenso':
+            situacao = 'Prazo Suspenso'
+        elif p.get('status_servidor') == 'Devolvido' or p.get('status_chefe') == 'Devolvido':
+            situacao = 'Devolvido'
+        elif d_concl_chefe or p.get('status_chefe') == 'Finalizado':
+            situacao = 'Concluído'
+        elif d_concl_serv:
+            situacao = 'Em Revisão pelo Chefe'
+        else:
+            situacao = 'Em Andamento com Servidor'
 
         dados_processos.append({
             'Nº do Processo': p.get('processo_numero'),
             'Tipo do Processo': tipo_prod.get('nome_produto'),
+            'Data de Entrada no MPC': d_entrada_mpc,
             'Servidor Responsável': servidor.get('nome_completo') if servidor else "Desconhecido",
             'Data de Atribuição (Servidor)': d_atrib_serv,
             'Data de Conclusão (Servidor)': d_concl_serv,
@@ -219,7 +245,9 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             'Tempo de Revisão (Chefe)': tempo_revisao_chefe,
             'Chefe Concluiu no Prazo?': chefe_concluiu_prazo,
             'Prazo MPC - servidor': p.get('prazo_servidor_aplicado'),
-            'Prazo MPC - chefe de gabinete': p.get('prazo_chefe_aplicado')
+            'Prazo MPC - chefe de gabinete': p.get('prazo_chefe_aplicado'),
+            'Situação Atual': situacao,
+            'Data de Finalização': d_finalizacao
         })
     
     # Log de diagnóstico
@@ -253,7 +281,46 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
     df_univ_calc = df_universo.copy()
     df_univ_calc['Data de Conclusão (Servidor)'] = pd.to_datetime(df_univ_calc['Data de Conclusão (Servidor)'], errors='coerce').dt.date
     df_univ_calc['Data de Revisão (Chefe de Gabinete)'] = pd.to_datetime(df_univ_calc['Data de Revisão (Chefe de Gabinete)'], errors='coerce').dt.date
-    
+    df_univ_calc['Data de Atribuição (Servidor)'] = pd.to_datetime(df_univ_calc['Data de Atribuição (Servidor)'], errors='coerce').dt.date
+    if 'Data de Entrada no MPC' in df_univ_calc.columns:
+        df_univ_calc['Data de Entrada no MPC'] = pd.to_datetime(df_univ_calc['Data de Entrada no MPC'], errors='coerce').dt.date
+
+    # Filter: Processos cuja ENTRADA / Atribuição ocorreu dentro do período da correição
+    mask_atrib = df_univ_calc['Data de Atribuição (Servidor)'].apply(lambda x: start_date <= x <= end_date if pd.notnull(x) else False)
+    if 'Data de Entrada no MPC' in df_univ_calc.columns:
+        mask_mpc_in = df_univ_calc['Data de Entrada no MPC'].apply(lambda x: start_date <= x <= end_date if pd.notnull(x) else False)
+        mask_ingressados = mask_atrib | mask_mpc_in
+    else:
+        mask_ingressados = mask_atrib
+
+    df_ingressados_raw = df_univ_calc[mask_ingressados].copy()
+    cols_ingressados = [
+        'Nº do Processo',
+        'Tipo do Processo',
+        'Data de Entrada no MPC',
+        'Data de Atribuição (Servidor)',
+        'Situação Atual',
+        'Servidor Responsável',
+        'Prazo MPC - servidor',
+        'Data de Conclusão (Servidor)',
+        'Tempo de Conclusão (Servidor)',
+        'Servidor Concluiu no Prazo?',
+        'Chefe de Gabinete',
+        'Prazo MPC - chefe de gabinete',
+        'Data de Início da Revisão',
+        'Data de Revisão (Chefe de Gabinete)',
+        'Tempo de Revisão (Chefe)',
+        'Chefe Concluiu no Prazo?',
+        'Data de Finalização'
+    ]
+    cols_existentes = [c for c in cols_ingressados if c in df_ingressados_raw.columns]
+    df_ingressados = df_ingressados_raw[cols_existentes].copy()
+    df_ingressados.rename(columns={
+        'Data de Atribuição (Servidor)': 'Data de Entrada no Gabinete'
+    }, inplace=True)
+    if not df_ingressados.empty and 'Data de Entrada no Gabinete' in df_ingressados.columns:
+        df_ingressados.sort_values(by=['Data de Entrada no Gabinete', 'Nº do Processo'], inplace=True, na_position='last')
+
     # Filter: Conclusion IS IN report period
     mask_serv = df_univ_calc['Data de Conclusão (Servidor)'].apply(lambda x: start_date <= x <= end_date if pd.notnull(x) else False)
     df_extrato_servidores = df_univ_calc[mask_serv].copy()
@@ -379,6 +446,7 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         'Prod por Tipo de Processo': df_prod_tipo_processo,
         'Prod por Chefe de Gabinete': df_prod_chefe,
         'Prod por Servidor': df_prod_servidor,
+        'Processos Ingressados': df_ingressados,
         'Afastamentos no Período': df_afastamentos,
         'Extrato Servidores': df_extrato_servidores,
         'Extrato Chefes Gabinete': df_extrato_chefes,
