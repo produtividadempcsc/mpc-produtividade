@@ -179,6 +179,7 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
                  servidor_concluiu_prazo = "Não se Aplica"
              else:
                  servidor_concluiu_prazo = "Em Andamento"
+             afastamento_servidor = count_leave_days_in_period(d_atrib_serv, end_date, leaves_servidor)
 
         # --- Cálculos Chefe ---
         chefe_concluiu_prazo = "N/A"
@@ -211,6 +212,7 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
             afastamento_chefe = count_leave_days_in_period(d_inicio_revisao, d_concl_chefe, leaves_chefe)
         elif d_inicio_revisao and not d_concl_chefe:
             chefe_concluiu_prazo = "Em Andamento"
+            afastamento_chefe = count_leave_days_in_period(d_inicio_revisao, end_date, leaves_chefe)
         else:
             chefe_concluiu_prazo = "Aguardando Servidor"
 
@@ -304,12 +306,14 @@ def get_corregedoria_data(procurador_id: int, start_date: date, end_date: date):
         'Prazo MPC - servidor',
         'Data de Conclusão (Servidor)',
         'Tempo de Conclusão (Servidor)',
+        'Afastamento Servidor (dias)',
         'Servidor Concluiu no Prazo?',
         'Chefe de Gabinete',
         'Prazo MPC - chefe de gabinete',
         'Data de Início da Revisão',
         'Data de Revisão (Chefe de Gabinete)',
         'Tempo de Revisão (Chefe)',
+        'Afastamento Chefe (dias)',
         'Chefe Concluiu no Prazo?',
         'Data de Finalização'
     ]
